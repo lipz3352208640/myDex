@@ -1,0 +1,12 @@
+Name: myconsumer.rpc
+ListenOn: 0.0.0.0:8080
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: myconsumer.rpc
+Helius: 
+  WSUrl: "wss://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
+
+Thread: 
+  Count:
+    Consumer: 2
