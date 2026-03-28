@@ -3,7 +3,7 @@ package block
 import (
 	"context"
 	"errors"
-	"fmt"
+	"myConsumer/internal/logic/constant"
 	"myConsumer/internal/svc"
 	"net/http"
 	"strings"
@@ -11,7 +11,8 @@ import (
 
 	"github.com/blocto/solana-go-sdk/client"
 	"github.com/blocto/solana-go-sdk/rpc"
-	"github.com/mr-tron/base58"
+	"github.com/blocto/solana-go-sdk/types"
+	"github.com/samber/lo"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/threading"
 )
@@ -93,11 +94,32 @@ func (b *BlockService) ParseTransacton(slot uint64, workID int) {
 		default:
 		}
 
-		signatures := transcation.Transaction.Signatures
+		if transcation.Meta.Err != nil {
+			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, slot, transcation.Meta.Err)
+			return
+		}
 
-		if len(signatures) > 0 {
-			data := base58.Encode(signatures[0])
-			fmt.Printf("[work-%d] use base58 decode sinature is %s\n", workID, data)
+		instructions := transcation.Transaction.Message.Instructions
+
+		if len(instructions) > 0 {
+			accountKeys := transcation.AccountKeys
+			lo.ForEach(instructions, func(instruction types.CompiledInstruction, _ int) {
+				programId := accountKeys[instruction.ProgramIDIndex].String()
+				switch programId {
+				case constant.PumpAddress:
+					b.Infof("[work-%d] transaction is pumpfun program, slot=%d signatures=%d",
+						workID, slot, len(block.Signatures))
+					pumpData, err := ParsePumpInstruction(transcation.Transaction.Message.Header, accountKeys, instruction)
+					if err != nil {
+						b.Errorf("[work-%d] parse pump instruction fail, slot=%d err=%v", workID, slot, err)
+						return
+					}
+					b.Infof("[work-%d] parsed pump data: %s", workID, pumpData)
+				default:
+					return
+				}
+			})
+
 		}
 	}
 }
