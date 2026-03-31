@@ -7,7 +7,7 @@ package myconsumerclient
 import (
 	"context"
 
-	"myConsumer/myConsumer"
+	"myDex/myConsumer/myConsumer"
 
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"

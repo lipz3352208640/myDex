@@ -4,9 +4,22 @@ ListenOn: 0.0.0.0:8080
 #   Hosts:
 #   - 127.0.0.1:2379
 #   Key: myconsumer.rpc
-Helius: 
+Helius:
+  NodeUrl:
+    - "https://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
   WSUrl: "wss://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
 
-Thread: 
+Sol:
+  StartBlock: 0
+
+Thread:
   Count:
     Consumer: 2
+    ConsumerFailedBlock: 10
+
+Mysql:
+  User: root
+  Password: "123456"
+  Host: 47.76.194.205
+  Port: 3306
+  Dbname: fun_dex

@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"myConsumer/internal/logic/constant"
-	"myConsumer/internal/logic/entity"
+	"myDex/myConsumer/internal/logic/entity"
+	"myDex/pkg/constant"
 
 	"github.com/blocto/solana-go-sdk/common"
 	"github.com/blocto/solana-go-sdk/types"

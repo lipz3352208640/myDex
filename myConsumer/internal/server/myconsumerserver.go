@@ -7,9 +7,9 @@ package server
 import (
 	"context"
 
-	"myConsumer/internal/logic"
-	"myConsumer/internal/svc"
-	"myConsumer/myConsumer"
+	"myDex/myConsumer/internal/logic"
+	"myDex/myConsumer/internal/svc"
+	"myDex/myConsumer/myConsumer"
 )
 
 type MyConsumerServer struct {

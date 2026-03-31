@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"myConsumer/internal/logic/entity"
-	"myConsumer/internal/svc"
+	"myDex/myConsumer/internal/logic/entity"
+	"myDex/myConsumer/internal/svc"
 	"net"
 	"strings"
 	"time"
@@ -23,18 +23,21 @@ type SlotService struct {
 	subscriptionID int64
 	//日志
 	logx.Logger
+	//服务名
+	name string
 	//服务当前上下文
 	context context.Context
 	//服务取消
 	cancle   func(err error)
 	slotChan chan uint64
+	//
 }
 
-func NewSlotService(sc *svc.ServiceContext, slotChan chan uint64) *SlotService {
+func NewSlotService(sc *svc.ServiceContext, slotChan chan uint64, name string) *SlotService {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	return &SlotService{
 		ctx:      sc,
-		Logger:   logx.WithContext(ctx).WithFields(logx.Field("service", "myConsumer")),
+		Logger:   logx.WithContext(ctx).WithFields(logx.Field("service", name)),
 		context:  ctx,
 		cancle:   cancle,
 		slotChan: slotChan,

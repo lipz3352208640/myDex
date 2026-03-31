@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 
-	"myConsumer/internal/config"
-	"myConsumer/internal/logic/slot"
-	"myConsumer/internal/logic/block"
-	"myConsumer/internal/server"
-	"myConsumer/internal/svc"
-	"myConsumer/myConsumer"
+	"myDex/myConsumer/internal/config"
+	"myDex/myConsumer/internal/logic/block"
+	"myDex/myConsumer/internal/logic/slot"
+	"myDex/myConsumer/internal/server"
+	"myDex/myConsumer/internal/svc"
+	"myDex/myConsumer/myConsumer"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/service"
@@ -40,15 +40,18 @@ func main() {
 	})
 	group.Add(s)
 
-	{    
-		
-		//用生产者，消费者模型, channel 缓冲区不能为空，解决消费不及时，而导致数据阻塞堆积的问题
-		slotchannel := make(chan uint64,100)
+	{
 
-        group.Add(block.NewBlockService(ctx, slotchannel))
+		//用生产者，消费者模型, channel 缓冲区不能为空，解决消费不及时，而导致数据阻塞堆积的问题
+		slotchannel := make(chan uint64, 100)
+		group.Add(block.NewBlockService(ctx, slotchannel, "consume-slot", ctx.Config.Thread.Count.Consumer))
+
+		errSlotchannel := make(chan uint64, 1)
+		group.Add(block.NewBlockService(ctx, errSlotchannel, "consume-Failed-slot", ctx.Config.Thread.Count.ConsumerFailedBlock))
 
 		//加入slot业务service
-		group.Add(slot.NewSlotService(ctx, slotchannel))
+		group.Add(slot.NewSlotGroupService(ctx, slotchannel, errSlotchannel))
+
 	}
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
