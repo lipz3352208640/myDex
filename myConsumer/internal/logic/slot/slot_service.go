@@ -94,7 +94,7 @@ func (s *SlotService) getSlot() uint64 {
 			}
 			return 0
 		}
-		s.Infof("helius msg is %s\n", string(message))
+		//s.Infof("helius msg is %s\n", string(message))
 
 		//fmt.Printf("helius msg is %s\n", string(message))
 
@@ -149,7 +149,7 @@ func (s *SlotService) ConnectWs() {
 						break
 					}
 
-					s.Infof("helius subscribe ack is %s\n", string(message))
+					//s.Infof("helius subscribe ack is %s\n", string(message))
 
 					var errResp entity.WsErrResp
 					if err := json.Unmarshal(message, &errResp); err == nil && errResp.Error.Message != "" {

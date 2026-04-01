@@ -2,6 +2,7 @@ package slot
 
 import (
 	"errors"
+	"fmt"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/svc"
 	"time"
@@ -64,6 +65,7 @@ func (e *ErrSlotService) HandleSlotNotCompleted() {
 				case <-e.context.Done():
 					return
 				case <-sendTimer:
+					fmt.Println("发送失败slot:", block.Slot)
 					e.slotChan <- uint64(block.Slot)
 				}
 			}

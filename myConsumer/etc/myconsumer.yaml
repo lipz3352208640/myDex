@@ -20,6 +20,6 @@ Thread:
 Mysql:
   User: root
   Password: "123456"
-  Host: 47.76.194.205
+  Host: 47.76.192.225
   Port: 3306
   Dbname: fun_dex

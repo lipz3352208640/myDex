@@ -100,20 +100,29 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 	if err != nil || block == nil {
 		if strings.Contains(strings.ToLower(err.Error()), "was skipped") {
 			dbBlock.Status = constant.BlockSkipped
+			if block != nil && block.BlockTime != nil {
+				dbBlock.BlockTime = *block.BlockTime
+			} else {
+				dbBlock.BlockTime = time.Now()
+			}
+			dbBlock.ErrMessage = err.Error()
 			b.Infof("getSolBlockInfo by slot:%d was skipped, err:%s", slot, err.Error())
-			b.sc.BlockModel.Insert(b.ctx, dbBlock)
+			if err := b.saveOrUpdateSlot(dbBlock); err != nil {
+				b.Errorf("[work-%d] insert or update skipped block fail, slot=%d err=%v", workID, slot, err)
+			}
 			return
 		}
 		dbBlock.Status = constant.BlockFailed
 
 		if block != nil && block.BlockTime != nil {
-			fmt.Println("输出的时间：", *block.BlockTime)
 			dbBlock.BlockTime = *block.BlockTime
 		} else {
 			dbBlock.BlockTime = time.Now()
-			dbBlock.ErrMessage = err.Error()
 		}
-		b.sc.BlockModel.Insert(b.ctx, dbBlock)
+		dbBlock.ErrMessage = err.Error()
+		if err := b.saveOrUpdateSlot(dbBlock); err != nil {
+			b.Errorf("[work-%d] insert or update failed block fail, slot=%d err=%v", workID, slot, err)
+		}
 		return
 	}
 
@@ -138,11 +147,24 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 
 	//入库
 	dbBlock.Status = constant.BlockProcessed
-	b.sc.BlockModel.Insert(b.ctx, dbBlock)
+	if insertErr := b.saveOrUpdateSlot(dbBlock); insertErr != nil {
+		b.Errorf("[work-%d] insert or update processed block fail, slot=%d err=%v", workID, slot, insertErr)
+		return
+	}
 
 	//解析交易指令
 	b.parseTxInstruction(block, workID, slot)
 
+}
+
+func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {
+	var err error
+	if block.Id != 0 {
+		err = b.sc.BlockModel.Update(b.ctx, block)
+	} else {
+		err = b.sc.BlockModel.Insert(b.ctx, block)
+	}
+	return err
 }
 
 func (b *BlockService) parseTxInstruction(block *client.Block, workID int, slot uint64) {
@@ -214,7 +236,16 @@ func (b *BlockService) GetSolBlockInfo(slot uint64) (*client.Block, error) {
 			//非rpc异常或者请求限制等，直接返回
 			return nil, err
 		} else {
-			return resp, nil
+
+			switch slot % 3 {
+			case 0:
+				return resp, nil
+			case 1:
+				return resp, errors.New("was skipped")
+			default:
+				return resp, errors.New("custom error")
+			}
+			//return resp, nil
 		}
 	}
 
