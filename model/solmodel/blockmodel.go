@@ -12,7 +12,6 @@ import (
 
 // avoid unused err
 var _ = InitField
-var _ BlockModel = (*customBlockModel)(nil)
 
 type (
 	// BlockModel is an interface to be customized, add more methods here,
@@ -26,6 +25,7 @@ type (
 		WithSession(tx *gorm.DB) BlockModel
 		GetFirstFailedSlot(ctx context.Context) (*Block, error)
 		GetBatchFailedBlockBySlot(ctx context.Context, slot int64, limit int) ([]*Block, error)
+		FindOneNearSlot(ctx context.Context, slot int64) (*Block, error)
 	}
 
 	customBlockModel struct {
@@ -39,6 +39,18 @@ func (c customBlockModel) GetBatchFailedBlockBySlot(context context.Context, slo
 		Where("slot > ?", slot).
 		Order("slot Desc").
 		Limit(limit).Find(&resp).Error
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c customBlockModel) FindOneNearSlot(context context.Context, slot int64) (*Block, error) {
+	var resp *Block
+	err := c.conn.WithContext(context).Model(&Block{}).Where("status = ?", constant.BlockProcessed).
+		Where("slot < ?", slot).
+		Order("slot Desc").
+		First(&resp).Error
 	if err != nil {
 		return nil, err
 	}

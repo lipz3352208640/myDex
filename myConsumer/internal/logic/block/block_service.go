@@ -152,6 +152,11 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		return
 	}
 
+	//获取交易价格
+	price := GetSolPrice(block, dbBlock, b)
+
+	fmt.Println("价格：", price)
+
 	//解析交易指令
 	b.parseTxInstruction(block, workID, slot)
 
@@ -237,15 +242,15 @@ func (b *BlockService) GetSolBlockInfo(slot uint64) (*client.Block, error) {
 			return nil, err
 		} else {
 
-			switch slot % 3 {
-			case 0:
-				return resp, nil
-			case 1:
-				return resp, errors.New("was skipped")
-			default:
-				return resp, errors.New("custom error")
-			}
-			//return resp, nil
+			// switch slot % 3 {
+			// case 0:
+			// 	return resp, nil
+			// case 1:
+			// 	return resp, errors.New("was skipped")
+			// default:
+			// 	return resp, errors.New("custom error")
+			// }
+			return resp, nil
 		}
 	}
 

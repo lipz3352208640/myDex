@@ -11,5 +11,14 @@ const (
 	//区块处理状态
 	BlockProcessed = 1
 	BlockFailed    = 2
-	BlockSkipped    = 3
+	BlockSkipped   = 3
+)
+
+const (
+	Token2022ProgramID = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+	TokenProgramID     = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+
+	//token mint
+	Usdg = "So11111111111111111111111111111111111111112"
+	Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 )
