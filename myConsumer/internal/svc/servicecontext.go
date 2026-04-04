@@ -5,6 +5,7 @@ import (
 	"log"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/config"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -29,6 +30,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	for _, node := range c.Helius.NodeUrl {
 		c := client.New(rpc.WithEndpoint(node), rpc.WithHTTPClient(&http.Client{
 			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				Proxy: nil,
+				DialContext: (&net.Dialer{
+					Timeout: 10 * time.Second,
+				}).DialContext,
+			},
 		}))
 		solClients = append(solClients, c)
 	}

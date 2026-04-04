@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"myDex/model/solmodel"
+	"myDex/myConsumer/internal/logic/entity"
 	"myDex/myConsumer/internal/svc"
 	"myDex/pkg/constant"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/blocto/solana-go-sdk/client"
 	"github.com/blocto/solana-go-sdk/rpc"
 	"github.com/blocto/solana-go-sdk/types"
+	"github.com/mr-tron/base58"
 	"github.com/samber/lo"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/threading"
@@ -28,6 +31,7 @@ type BlockService struct {
 	cancle         func(err error)
 	slotChan       chan uint64
 	goroutineCount int
+	pumpService    *PumpFunService
 }
 
 func NewBlockService(sc *svc.ServiceContext, slotChan chan uint64, name string, count int) *BlockService {
@@ -38,12 +42,19 @@ func NewBlockService(sc *svc.ServiceContext, slotChan chan uint64, name string, 
 		ctx: ctx,
 		c: client.New(rpc.WithEndpoint(rpcURL), rpc.WithHTTPClient(&http.Client{
 			Timeout: 5 * time.Second,
+			Transport: &http.Transport{
+				Proxy: nil,
+				DialContext: (&net.Dialer{
+					Timeout: 5 * time.Second,
+				}).DialContext,
+			},
 		})),
 		Logger:         logx.WithContext(ctx).WithFields(logx.Field("service", fmt.Sprintf("block-%s", name))),
 		name:           name,
 		cancle:         cancle,
 		slotChan:       slotChan,
 		goroutineCount: count,
+		pumpService:    NewPumpFunService(),
 	}
 }
 
@@ -126,9 +137,6 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		return
 	}
 
-	b.Infof("[work-%d] get block success, slot=%d blockhash=%s signatures=%d transactions=%d",
-		workID, slot, block.Blockhash, len(block.Signatures), len(block.Transactions))
-
 	if len(block.Transactions) == 0 {
 		b.Infof("[work-%d] block has no transaction details, slot=%d signatures=%d",
 			workID, slot, len(block.Signatures))
@@ -153,12 +161,23 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 	}
 
 	//获取交易价格
-	price := GetSolPrice(block, dbBlock, b)
+	tokenAccountMap, price := GetSolPrice(block, dbBlock, b)
 
-	fmt.Println("价格：", price)
+	if price <= 0 {
+		return
+	}
+
+	fmt.Println("SOL 价格：", price)
+
+	txDecode := &entity.TxDecodeEntity{
+		Price:           price,
+		TokenAccountMap: tokenAccountMap,
+		Block:           dbBlock,
+		Slot:            slot,
+	}
 
 	//解析交易指令
-	b.parseTxInstruction(block, workID, slot)
+	b.parseTxInstruction(block, txDecode, workID)
 
 }
 
@@ -172,7 +191,7 @@ func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {
 	return err
 }
 
-func (b *BlockService) parseTxInstruction(block *client.Block, workID int, slot uint64) {
+func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDecodeEntity, workID int) {
 	for _, transcation := range block.Transactions {
 		select {
 		case <-b.ctx.Done():
@@ -180,27 +199,40 @@ func (b *BlockService) parseTxInstruction(block *client.Block, workID int, slot 
 		default:
 		}
 
-		if transcation.Meta.Err != nil {
-			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, slot, transcation.Meta.Err)
+		if transcation.Meta == nil || transcation.Meta.Err != nil {
+			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
 			return
 		}
 
 		instructions := transcation.Transaction.Message.Instructions
 
+		if len(transcation.Transaction.Signatures) == 0 {
+			logx.Errorf("[work-%d] transaction signature is entity, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
+			return
+		}
+
+		tx.Signature = base58.Encode(transcation.Transaction.Signatures[0])
+		tx.TranscationMeta = transcation.Meta
+		tx.PumpEventIndex = 0
+
 		if len(instructions) > 0 {
 			accountKeys := transcation.AccountKeys
+			tx.AccountKeys = accountKeys
 			lo.ForEach(instructions, func(instruction types.CompiledInstruction, _ int) {
 				programId := accountKeys[instruction.ProgramIDIndex].String()
 				switch programId {
 				case constant.PumpAddress:
 					b.Infof("[work-%d] transaction is pumpfun program, slot=%d signatures=%d",
-						workID, slot, len(block.Signatures))
-					pumpData, err := ParsePumpInstruction(transcation.Transaction.Message.Header, accountKeys, instruction)
-					if err != nil {
-						b.Errorf("[work-%d] parse pump instruction fail, slot=%d err=%v", workID, slot, err)
+						workID, tx.Slot, len(block.Signatures))
+
+					tx.Instruction = &instruction
+					price := b.pumpService.DecodePumpTranscation(tx)
+					//pumpData, err := b.ParsePumpInstruction(transcation.Transaction.Message.Header, accountKeys, instruction)
+					if price == 0 {
+						b.Errorf("[work-%d] parse pump instruction token price, slot=%d", workID, tx.Slot)
 						return
 					}
-					b.Infof("[work-%d] parsed pump data: %s", workID, pumpData)
+					//b.Infof("[work-%d] parsed pump data: %s", workID, pumpData)
 				default:
 					return
 				}

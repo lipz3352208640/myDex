@@ -26,11 +26,11 @@ var ProgramPhoneNix = common.PublicKeyFromString("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYq
 
 var StableCoinSwapDexes = []common.PublicKey{ProgramOrca, ProgramRaydiumConcentratedLiquidity, ProgramMeteoraDLMM, ProgramPhoneNix}
 
-func GetSolPrice(block *client.Block, dbBlock *solmodel.Block, b *BlockService) float64 {
+func GetSolPrice(block *client.Block, dbBlock *solmodel.Block, b *BlockService) (map[string]*entity.TokenAccount, float64) {
 	var prices []float64
+	tokenAccountMap := make(map[string]*entity.TokenAccount)
 	for _, transcation := range block.Transactions {
 		innerInstMap := make(map[int]*client.InnerInstruction)
-		tokenAccountMap := make(map[string]*entity.TokenAccount)
 		makeInnerInstWithOuterMap(transcation, innerInstMap)
 		hasChange := FillTokenAccountMap(transcation, tokenAccountMap)
 		if !hasChange {
@@ -48,15 +48,15 @@ func GetSolPrice(block *client.Block, dbBlock *solmodel.Block, b *BlockService) 
 
 	finalPrice := RemoveMinAndMaxAndCalculateAverage(prices)
 	if finalPrice > 0 {
-		return finalPrice
+		return tokenAccountMap, finalPrice
 	}
 	if dbBlock.SolPrice > 0 {
-		return dbBlock.SolPrice
+		return tokenAccountMap, dbBlock.SolPrice
 	}
 	if block, err := b.sc.BlockModel.FindOneNearSlot(b.ctx, dbBlock.Slot); err == nil && block != nil {
-		return block.SolPrice
+		return tokenAccountMap, block.SolPrice
 	}
-	return 0
+	return tokenAccountMap, 0
 
 }
 
@@ -71,14 +71,12 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 	tokenAccountMap map[string]*entity.TokenAccount,
 	transcation client.BlockTransaction) []float64 {
 	accountKeys := transcation.AccountKeys
-	signature := getTransactionSignature(transcation)
+	//signature := getTransactionSignature(transcation)
 
 	var prices []float64
 	lo.ForEach(transcation.Transaction.Message.Instructions, func(inst types.CompiledInstruction, index int) {
 		if lo.Contains(StableCoinSwapDexes, accountKeys[inst.ProgramIDIndex]) {
 			if innerInstMap[index] == nil {
-				fmt.Printf("sol price debug: signature=%s outerIndex=%d program=%s innerInstructions=0\n",
-					signature, index, accountKeys[inst.ProgramIDIndex].String())
 				return
 			}
 
@@ -95,19 +93,19 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 				if from != nil && to != nil {
 					if from.TokenMintAccountAddress == to.TokenMintAccountAddress {
 
-						if from.TokenMintAccountAddress == constant.Usdg || from.TokenMintAccountAddress == constant.Usdc {
+						if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc {
 							allTransfer = append(allTransfer, transfer)
-							fmt.Printf("sol price debug: signature=%s outerIndex=%d innerIndex=%d mint=%s amount=%d from=%s to=%s fromOwner=%s toOwner=%s\n",
-								signature,
-								index,
-								innerIndex,
-								from.TokenMintAccountAddress,
-								transfer.Amount,
-								transfer.From.String(),
-								transfer.To.String(),
-								from.Owner,
-								to.Owner,
-							)
+							// fmt.Printf("sol price debug: signature=%s outerIndex=%d innerIndex=%d mint=%s amount=%d from=%s to=%s fromOwner=%s toOwner=%s\n",
+							// 	signature,
+							// 	index,
+							// 	innerIndex,
+							// 	from.TokenMintAccountAddress,
+							// 	transfer.Amount,
+							// 	transfer.From.String(),
+							// 	transfer.To.String(),
+							// 	from.Owner,
+							// 	to.Owner,
+							// )
 						}
 					}
 				}
@@ -116,12 +114,64 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 
 			//swapTransfer分组并计算价格
 			price := CalcPriceOnAllTransferBySwapGroup(allTransfer, tokenAccountMap)
-			fmt.Printf("sol price debug: signature=%s outerIndex=%d calculatedPrice=%f\n",
-				signature, index, price)
+			// fmt.Printf("sol price debug: signature=%s outerIndex=%d calculatedPrice=%f\n",
+			// 	signature, index, price)
 			if price > 0 {
 				prices = append(prices, price)
 			}
 		}
+	})
+
+	lo.ForEach(transcation.Meta.InnerInstructions, func(inst client.InnerInstruction, index int) {
+		lo.ForEach(inst.Instructions, func(innerInst types.CompiledInstruction, i int) {
+			if lo.Contains(StableCoinSwapDexes, accountKeys[innerInst.ProgramIDIndex]) {
+
+				innerInsruction := GetInnerInstructionByInner(inst.Instructions, i, 2)
+				if innerInsruction == nil {
+					return
+				}
+
+				var allTransfer []*token.TransferParam
+
+				lo.ForEach(innerInsruction.Instructions, func(inst types.CompiledInstruction, innerIndex int) {
+					transfer, err := getTransfer(accountKeys, inst)
+					if err != nil || transfer == nil {
+						return
+					}
+					from := tokenAccountMap[transfer.From.String()]
+					to := tokenAccountMap[transfer.To.String()]
+
+					if from != nil && to != nil {
+						if from.TokenMintAccountAddress == to.TokenMintAccountAddress {
+
+							if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc {
+								allTransfer = append(allTransfer, transfer)
+								// fmt.Printf("sol price debug: signature=%s outerIndex=%d innerIndex=%d mint=%s amount=%d from=%s to=%s fromOwner=%s toOwner=%s\n",
+								// 	signature,
+								// 	index,
+								// 	innerIndex,
+								// 	from.TokenMintAccountAddress,
+								// 	transfer.Amount,
+								// 	transfer.From.String(),
+								// 	transfer.To.String(),
+								// 	from.Owner,
+								// 	to.Owner,
+								// )
+							}
+						}
+					}
+
+				})
+
+				//swapTransfer分组并计算价格
+				price := CalcPriceOnAllTransferBySwapGroup(allTransfer, tokenAccountMap)
+				// fmt.Printf("sol price debug: signature=%s outerIndex=%d calculatedPrice=%f\n",
+				// 	signature, index, price)
+				if price > 0 {
+					prices = append(prices, price)
+				}
+			}
+		})
 	})
 
 	return prices
@@ -235,7 +285,7 @@ func CalcPriceOnAllTransferBySwapGroup(allTransfer []*token.TransferParam,
 				continue
 			}
 
-			if fromTokenAccount.TokenMintAccountAddress == constant.Usdg {
+			if fromTokenAccount.TokenMintAccountAddress == constant.Wsol {
 				if IsSwapTransfer(allTransfer[j], allTransfer[i], tokenAccountMap) {
 					usdcTotal += allTransfer[j].Amount
 					usdgTotal += allTransfer[i].Amount
@@ -303,6 +353,20 @@ func makeInnerInstWithOuterMap(transcation client.BlockTransaction,
 	}
 }
 
+// 多跳路由情况下，对内层指令构造swap组。一般一个swap指令下面跟的就是两笔transfer
+func GetInnerInstructionByInner(instructions []types.CompiledInstruction, startIndex, innerLen int) *client.InnerInstruction {
+	if startIndex+innerLen+1 > len(instructions) {
+		return nil
+	}
+	innerInstruction := &client.InnerInstruction{
+		Index: uint64(instructions[startIndex].ProgramIDIndex),
+	}
+	for i := 0; i < innerLen; i++ {
+		innerInstruction.Instructions = append(innerInstruction.Instructions, instructions[startIndex+i+1])
+	}
+	return innerInstruction
+}
+
 // 填充token账户
 func FillTokenAccountMap(transcation client.BlockTransaction,
 	tokenAccountMap map[string]*entity.TokenAccount) bool {
@@ -311,15 +375,17 @@ func FillTokenAccountMap(transcation client.BlockTransaction,
 	if len(transcation.Meta.PreTokenBalances) != 0 {
 		lo.ForEach(transcation.Meta.PreTokenBalances, func(item rpc.TransactionMetaTokenBalance, index int) {
 			value, _ := strconv.ParseInt(item.UITokenAmount.Amount, 10, 64)
-			tokenAccountMap[accountKeys[item.AccountIndex].String()] = &entity.TokenAccount{
-				Owner:                   item.Owner,
-				PreValue:                value,
-				PreValueUIString:        item.UITokenAmount.UIAmountString,
-				TokenDecimal:            item.UITokenAmount.Decimals,
-				TokenMintAccountAddress: item.Mint,
-				TokenAccountAddress:     accountKeys[item.AccountIndex].String(),
-				Closed:                  true,
-				Init:                    true,
+			if tokenAccountMap[accountKeys[item.AccountIndex].String()] == nil {
+				tokenAccountMap[accountKeys[item.AccountIndex].String()] = &entity.TokenAccount{
+					Owner:                   item.Owner,
+					PreValue:                value,
+					PreValueUIString:        item.UITokenAmount.UIAmountString,
+					TokenDecimal:            item.UITokenAmount.Decimals,
+					TokenMintAccountAddress: item.Mint,
+					TokenAccountAddress:     accountKeys[item.AccountIndex].String(),
+					Closed:                  true,
+					Init:                    true,
+				}
 			}
 		})
 	}
@@ -386,6 +452,14 @@ func FillTokenAccountMap(transcation client.BlockTransaction,
 		})
 	}
 
+	accountDecimaMap := make(map[string]uint8)
+	for _, item := range tokenAccountMap {
+		accountDecimaMap[item.TokenMintAccountAddress] = item.TokenDecimal
+	}
+	for _, item := range tokenAccountMap {
+		item.TokenDecimal = accountDecimaMap[item.TokenMintAccountAddress]
+	}
+
 	return hasChange
 
 }
@@ -420,7 +494,7 @@ func FilterIntializeAccount(inst types.CompiledInstruction, accountKeys []common
 		return true
 	}
 	//关注交易账户相关的账户
-	if tokenAccountMap[account] == nil || tokenAccountMap[account].TokenAccountAddress == mint {
+	if tokenAccountMap[account] != nil && tokenAccountMap[account].TokenMintAccountAddress == mint {
 		return true
 	}
 

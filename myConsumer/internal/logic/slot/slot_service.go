@@ -128,6 +128,7 @@ func (s *SlotService) ConnectWs() {
 	//创建ws客户端拨号
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = 5 * time.Second
+	dialer.Proxy = nil
 	//创建客户端,重试
 	for {
 		conn, _, err := dialer.Dial(s.ctx.Config.Helius.WSUrl, nil)

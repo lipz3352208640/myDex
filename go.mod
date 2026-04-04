@@ -7,26 +7,12 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/klen-ygs/gorm-zero v1.3.3
 	github.com/samber/lo v1.53.0
+	github.com/shopspring/decimal v1.3.1
 	github.com/zeromicro/go-zero v1.6.2
 	google.golang.org/grpc v1.75.0
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/mysql v1.5.4
 	gorm.io/gorm v1.31.1
-)
-
-require (
-	github.com/andres-erbsen/clock v0.0.0-20160526145045-9e14626cd129 // indirect
-	github.com/blendle/zapdriver v1.3.1 // indirect
-	github.com/gagliardetto/binary v0.8.0 // indirect
-	github.com/gagliardetto/treeout v0.1.4 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
-	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
-	github.com/mostynb/zstdpool-freelist v0.0.0-20201229113212-927304c0c3b1 // indirect
-	github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091 // indirect
-	go.mongodb.org/mongo-driver v1.13.1 // indirect
-	go.uber.org/ratelimit v0.2.0 // indirect
-	golang.org/x/crypto v0.39.0 // indirect
 )
 
 require (
@@ -40,7 +26,6 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
-	github.com/gagliardetto/solana-go v1.14.0
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
@@ -64,8 +49,9 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/mr-tron/base58 v1.2.0 // indirect
+	github.com/mr-tron/base58 v1.2.0
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/near/borsh-go v0.3.2-0.20220516180422-1ff87d108454
 	github.com/openzipkin/zipkin-go v0.4.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 	github.com/prometheus/client_golang v1.18.0 // indirect

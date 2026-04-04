@@ -1,6 +1,7 @@
 package constant
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -20,8 +21,8 @@ func TestByteToHex(t *testing.T) {
 	b0 := binary.LittleEndian.Uint64(bytes)
 	fmt.Printf("hexString is %x\n", b0)
 
-	b1 := []byte{51, 230, 133, 164, 1, 127, 131, 173}
-	b := binary.LittleEndian.Uint64(b1)
+	b1 := []byte{189, 219, 127, 211, 78, 230, 97, 238}
+	s := base64.StdEncoding.EncodeToString(b1)
 
-	fmt.Printf("hexString is %x\n", b)
+	fmt.Printf("hexString is %s\n", s)
 }
