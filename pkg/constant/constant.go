@@ -27,3 +27,8 @@ const (
 	//sol 虚拟流动量和真实流动量的差值
 	SolReservesDiff = 30000000000
 )
+
+const (
+	SolChainId    = "100000"
+	SolChainIdInt = 100000
+)

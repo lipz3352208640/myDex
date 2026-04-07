@@ -1969,7 +1969,7 @@
       }
     },
     {
-      "name": "ETradevent",
+      "name": "TradeEvent",
       "type": {
         "kind": "struct",
         "fields": [

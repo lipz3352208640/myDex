@@ -67,9 +67,27 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 			return 0
 		}
 		tokenAccountIndex := int(txDecode.Instruction.Accounts[5])
+		curveIndex := int(txDecode.Instruction.Accounts[3])
+		curveAtaIndex := int(txDecode.Instruction.Accounts[4])
+		walletIndx := int(txDecode.Instruction.Accounts[6])
 		if tokenAccountIndex >= len(txDecode.AccountKeys) {
 			p.Errorf("pump token account index out of range, signature=%s index=%d accountKeys=%d",
 				signature, tokenAccountIndex, len(txDecode.AccountKeys))
+			return 0
+		}
+		if curveIndex >= len(txDecode.AccountKeys) {
+			p.Errorf("pump bonding curve account index out of range, signature=%s index=%d accountKeys=%d",
+				signature, curveIndex, len(txDecode.AccountKeys))
+			return 0
+		}
+		if curveAtaIndex >= len(txDecode.AccountKeys) {
+			p.Errorf("pump bonding curve ata account index out of range, signature=%s index=%d accountKeys=%d",
+				signature, curveAtaIndex, len(txDecode.AccountKeys))
+			return 0
+		}
+		if walletIndx >= len(txDecode.AccountKeys) {
+			p.Errorf("pump wallet account index out of range, signature=%s index=%d accountKeys=%d",
+				signature, walletIndx, len(txDecode.AccountKeys))
 			return 0
 		}
 
@@ -82,11 +100,14 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		}
 
 		//pump中的曲线状态账户，记录曲线变化的
-		curve := txDecode.AccountKeys[txDecode.Instruction.Accounts[3]].String()
+		curveAccountAddress := txDecode.AccountKeys[curveIndex].String()
+		//曲线关联的ata账户
+		curveAtaAccountAddress := txDecode.AccountKeys[curveAtaIndex].String()
+		//钱包账户
+		walletAccountAddress := txDecode.AccountKeys[walletIndx].String()
 
 		var event *entity.PumpEvent
 
-		fmt.Println("这是pump", len(txDecode.PumpEvents), txDecode.PumpEventIndex)
 
 		if len(txDecode.PumpEvents) == 0 {
 			events := p.DecodePumpEvents(txDecode.TranscationMeta.LogMessages)
@@ -115,8 +136,6 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		solAmount := event.SolAmount
 		tokenAmount := event.TokenAccount
 
-		fmt.Printf("pump debug: solUsd=%f, solAmount=%d, tokenAmount=%d, tokenDecimal=%d\n",
-			price, event.SolAmount, event.TokenAccount, tokenAccount.TokenDecimal)
 
 		//链上的原始数量转换为实际数量
 		realSolAccount := decimal.New(int64(solAmount), -constant.SolDecimal).InexactFloat64()
@@ -141,6 +160,23 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		fmt.Println("token真实流动性：", realTokenReserves)
 		fmt.Println("sol真实流动性：", realSolReserves)
 		fmt.Println("pump曲线状态：", curve)
+		
+
+
+
+		trade := &entity.TradeWithPair{
+			ChainId: constant.SolChainId,
+			ChainIdInt: constant.SolChainIdInt,
+			Slot: txDecode.Block.Slot,
+			PairAddr: curveAccountAddress,
+			TxHash: txDecode.Signature,
+			Maker: walletAccountAddress,
+			Type: ,
+
+		}
+
+
+
 
 		return tokenPrice
 	}
@@ -198,11 +234,11 @@ func (p *PumpFunService) ParsePumpInstruction(header types.MessageHeader, accoun
 	instType := binary.LittleEndian.Uint64(data[:8])
 	switch instType {
 	case constant.PumpBuyInstruction:
-		pumpBuyInstruction := ParsePumpBuyInstruction(header, accountKeys, instruction)
+		pumpBuyInstruction := p.ParsePumpBuyInstruction(header, accountKeys, instruction)
 		data, _ := json.Marshal(pumpBuyInstruction)
 		return string(data), nil
 	case constant.PumpSellInstruction:
-		pumpSellInstruction := ParsePumpSellInstruction(header, accountKeys, instruction)
+		pumpSellInstruction := p.ParsePumpSellInstruction(header, accountKeys, instruction)
 		data, _ := json.Marshal(pumpSellInstruction)
 		return string(data), nil
 	default:
@@ -244,29 +280,29 @@ func (p *PumpFunService) ParsePumpBuyInstruction(header types.MessageHeader, acc
 	return entity.BuyInstruction{
 		ProgranId: accountKeys[instruction.ProgramIDIndex].String(),
 		Accounts: entity.PumpBuyAccount{
-			Pool:                             makeSignerAccount(pool, instruction.Accounts[0], len(accountKeys), header),
-			User:                             makeSignerAccount(user, instruction.Accounts[1], len(accountKeys), header),
-			GlobalConfig:                     makeSignerAccount(globalConfig, instruction.Accounts[2], len(accountKeys), header),
-			BaseMint:                         makeSignerAccount(baseMint, instruction.Accounts[3], len(accountKeys), header),
-			QuoteMint:                        makeSignerAccount(quoteMint, instruction.Accounts[4], len(accountKeys), header),
-			UserBaseTokenAccount:             makeSignerAccount(userBaseTokenAccount, instruction.Accounts[5], len(accountKeys), header),
-			UserQuoteTokenAccount:            makeSignerAccount(userQuoteTokenAccount, instruction.Accounts[6], len(accountKeys), header),
-			PoolBaseTokenAccount:             makeSignerAccount(poolBaseTokenAccount, instruction.Accounts[7], len(accountKeys), header),
-			PoolQuoteTokenAccount:            makeSignerAccount(poolQuoteTokenAccount, instruction.Accounts[8], len(accountKeys), header),
-			ProtocolFeeRecipient:             makeSignerAccount(protocolFeeRecipient, instruction.Accounts[9], len(accountKeys), header),
-			ProtocolFeeRecipientTokenAccount: makeSignerAccount(protocolFeeRecipientTokenAccount, instruction.Accounts[10], len(accountKeys), header),
-			BaseTokenProgram:                 makeSignerAccount(baseTokenProgram, instruction.Accounts[11], len(accountKeys), header),
-			QuoteTokenProgram:                makeSignerAccount(quoteTokenProgram, instruction.Accounts[12], len(accountKeys), header),
-			SystemProgram:                    makeSignerAccount(systemProgram, instruction.Accounts[13], len(accountKeys), header),
-			AssociatedTokenProgram:           makeSignerAccount(associatedTokenProgram, instruction.Accounts[14], len(accountKeys), header),
-			EventAuthority:                   makeSignerAccount(eventAuthority, instruction.Accounts[15], len(accountKeys), header),
-			Program:                          makeSignerAccount(program, instruction.Accounts[16], len(accountKeys), header),
-			CoinCreatorVaultAta:              makeSignerAccount(coinCreatorVaultAta, instruction.Accounts[17], len(accountKeys), header),
-			CoinCreatorVaultAuthority:        makeSignerAccount(coinCreatorVaultAuthority, instruction.Accounts[18], len(accountKeys), header),
-			GlobalVolumeAccumulator:          makeSignerAccount(globalVolumeAccumulator, instruction.Accounts[19], len(accountKeys), header),
-			UserVolumeAccumulator:            makeSignerAccount(userVolumeAccumulator, instruction.Accounts[20], len(accountKeys), header),
-			FeeConfig:                        makeSignerAccount(feeConfig, instruction.Accounts[21], len(accountKeys), header),
-			FeeProgram:                       makeSignerAccount(feeProgram, instruction.Accounts[22], len(accountKeys), header),
+			Pool:                             p.makeSignerAccount(pool, instruction.Accounts[0], len(accountKeys), header),
+			User:                             p.makeSignerAccount(user, instruction.Accounts[1], len(accountKeys), header),
+			GlobalConfig:                     p.makeSignerAccount(globalConfig, instruction.Accounts[2], len(accountKeys), header),
+			BaseMint:                         p.makeSignerAccount(baseMint, instruction.Accounts[3], len(accountKeys), header),
+			QuoteMint:                        p.makeSignerAccount(quoteMint, instruction.Accounts[4], len(accountKeys), header),
+			UserBaseTokenAccount:             p.makeSignerAccount(userBaseTokenAccount, instruction.Accounts[5], len(accountKeys), header),
+			UserQuoteTokenAccount:            p.makeSignerAccount(userQuoteTokenAccount, instruction.Accounts[6], len(accountKeys), header),
+			PoolBaseTokenAccount:             p.makeSignerAccount(poolBaseTokenAccount, instruction.Accounts[7], len(accountKeys), header),
+			PoolQuoteTokenAccount:            p.makeSignerAccount(poolQuoteTokenAccount, instruction.Accounts[8], len(accountKeys), header),
+			ProtocolFeeRecipient:             p.makeSignerAccount(protocolFeeRecipient, instruction.Accounts[9], len(accountKeys), header),
+			ProtocolFeeRecipientTokenAccount: p.makeSignerAccount(protocolFeeRecipientTokenAccount, instruction.Accounts[10], len(accountKeys), header),
+			BaseTokenProgram:                 p.makeSignerAccount(baseTokenProgram, instruction.Accounts[11], len(accountKeys), header),
+			QuoteTokenProgram:                p.makeSignerAccount(quoteTokenProgram, instruction.Accounts[12], len(accountKeys), header),
+			SystemProgram:                    p.makeSignerAccount(systemProgram, instruction.Accounts[13], len(accountKeys), header),
+			AssociatedTokenProgram:           p.makeSignerAccount(associatedTokenProgram, instruction.Accounts[14], len(accountKeys), header),
+			EventAuthority:                   p.makeSignerAccount(eventAuthority, instruction.Accounts[15], len(accountKeys), header),
+			Program:                          p.makeSignerAccount(program, instruction.Accounts[16], len(accountKeys), header),
+			CoinCreatorVaultAta:              p.makeSignerAccount(coinCreatorVaultAta, instruction.Accounts[17], len(accountKeys), header),
+			CoinCreatorVaultAuthority:        p.makeSignerAccount(coinCreatorVaultAuthority, instruction.Accounts[18], len(accountKeys), header),
+			GlobalVolumeAccumulator:          p.makeSignerAccount(globalVolumeAccumulator, instruction.Accounts[19], len(accountKeys), header),
+			UserVolumeAccumulator:            p.makeSignerAccount(userVolumeAccumulator, instruction.Accounts[20], len(accountKeys), header),
+			FeeConfig:                        p.makeSignerAccount(feeConfig, instruction.Accounts[21], len(accountKeys), header),
+			FeeProgram:                       p.makeSignerAccount(feeProgram, instruction.Accounts[22], len(accountKeys), header),
 		},
 		Data: entity.PumpBuyData{
 			BaseAmountOut:    baseAmountOut,
@@ -307,27 +343,27 @@ func (p *PumpFunService) ParsePumpSellInstruction(header types.MessageHeader, ac
 	return entity.SellInstruction{
 		ProgranId: accountKeys[instruction.ProgramIDIndex].String(),
 		Accounts: entity.PumpSellAccount{
-			Pool:                             makeSignerAccount(pool, instruction.Accounts[0], len(accountKeys), header),
-			User:                             makeSignerAccount(user, instruction.Accounts[1], len(accountKeys), header),
-			GlobalConfig:                     makeSignerAccount(globalConfig, instruction.Accounts[2], len(accountKeys), header),
-			BaseMint:                         makeSignerAccount(baseMint, instruction.Accounts[3], len(accountKeys), header),
-			QuoteMint:                        makeSignerAccount(quoteMint, instruction.Accounts[4], len(accountKeys), header),
-			UserBaseTokenAccount:             makeSignerAccount(userBaseTokenAccount, instruction.Accounts[5], len(accountKeys), header),
-			UserQuoteTokenAccount:            makeSignerAccount(userQuoteTokenAccount, instruction.Accounts[6], len(accountKeys), header),
-			PoolBaseTokenAccount:             makeSignerAccount(poolBaseTokenAccount, instruction.Accounts[7], len(accountKeys), header),
-			PoolQuoteTokenAccount:            makeSignerAccount(poolQuoteTokenAccount, instruction.Accounts[8], len(accountKeys), header),
-			ProtocolFeeRecipient:             makeSignerAccount(protocolFeeRecipient, instruction.Accounts[9], len(accountKeys), header),
-			ProtocolFeeRecipientTokenAccount: makeSignerAccount(protocolFeeRecipientTokenAccount, instruction.Accounts[10], len(accountKeys), header),
-			BaseTokenProgram:                 makeSignerAccount(baseTokenProgram, instruction.Accounts[11], len(accountKeys), header),
-			QuoteTokenProgram:                makeSignerAccount(quoteTokenProgram, instruction.Accounts[12], len(accountKeys), header),
-			SystemProgram:                    makeSignerAccount(systemProgram, instruction.Accounts[13], len(accountKeys), header),
-			AssociatedTokenProgram:           makeSignerAccount(associatedTokenProgram, instruction.Accounts[14], len(accountKeys), header),
-			EventAuthority:                   makeSignerAccount(eventAuthority, instruction.Accounts[15], len(accountKeys), header),
-			Program:                          makeSignerAccount(program, instruction.Accounts[16], len(accountKeys), header),
-			CoinCreatorVaultAta:              makeSignerAccount(coinCreatorVaultAta, instruction.Accounts[17], len(accountKeys), header),
-			CoinCreatorVaultAuthority:        makeSignerAccount(coinCreatorVaultAuthority, instruction.Accounts[18], len(accountKeys), header),
-			FeeConfig:                        makeSignerAccount(feeConfig, instruction.Accounts[19], len(accountKeys), header),
-			FeeProgram:                       makeSignerAccount(feeProgram, instruction.Accounts[20], len(accountKeys), header),
+			Pool:                             p.makeSignerAccount(pool, instruction.Accounts[0], len(accountKeys), header),
+			User:                             p.makeSignerAccount(user, instruction.Accounts[1], len(accountKeys), header),
+			GlobalConfig:                     p.makeSignerAccount(globalConfig, instruction.Accounts[2], len(accountKeys), header),
+			BaseMint:                         p.makeSignerAccount(baseMint, instruction.Accounts[3], len(accountKeys), header),
+			QuoteMint:                        p.makeSignerAccount(quoteMint, instruction.Accounts[4], len(accountKeys), header),
+			UserBaseTokenAccount:             p.makeSignerAccount(userBaseTokenAccount, instruction.Accounts[5], len(accountKeys), header),
+			UserQuoteTokenAccount:            p.makeSignerAccount(userQuoteTokenAccount, instruction.Accounts[6], len(accountKeys), header),
+			PoolBaseTokenAccount:             p.makeSignerAccount(poolBaseTokenAccount, instruction.Accounts[7], len(accountKeys), header),
+			PoolQuoteTokenAccount:            p.makeSignerAccount(poolQuoteTokenAccount, instruction.Accounts[8], len(accountKeys), header),
+			ProtocolFeeRecipient:             p.makeSignerAccount(protocolFeeRecipient, instruction.Accounts[9], len(accountKeys), header),
+			ProtocolFeeRecipientTokenAccount: p.makeSignerAccount(protocolFeeRecipientTokenAccount, instruction.Accounts[10], len(accountKeys), header),
+			BaseTokenProgram:                 p.makeSignerAccount(baseTokenProgram, instruction.Accounts[11], len(accountKeys), header),
+			QuoteTokenProgram:                p.makeSignerAccount(quoteTokenProgram, instruction.Accounts[12], len(accountKeys), header),
+			SystemProgram:                    p.makeSignerAccount(systemProgram, instruction.Accounts[13], len(accountKeys), header),
+			AssociatedTokenProgram:           p.makeSignerAccount(associatedTokenProgram, instruction.Accounts[14], len(accountKeys), header),
+			EventAuthority:                   p.makeSignerAccount(eventAuthority, instruction.Accounts[15], len(accountKeys), header),
+			Program:                          p.makeSignerAccount(program, instruction.Accounts[16], len(accountKeys), header),
+			CoinCreatorVaultAta:              p.makeSignerAccount(coinCreatorVaultAta, instruction.Accounts[17], len(accountKeys), header),
+			CoinCreatorVaultAuthority:        p.makeSignerAccount(coinCreatorVaultAuthority, instruction.Accounts[18], len(accountKeys), header),
+			FeeConfig:                        p.makeSignerAccount(feeConfig, instruction.Accounts[19], len(accountKeys), header),
+			FeeProgram:                       p.makeSignerAccount(feeProgram, instruction.Accounts[20], len(accountKeys), header),
 		},
 		Data: entity.PumpSellData{
 			BaseAmountOut:     baseAmountOut,

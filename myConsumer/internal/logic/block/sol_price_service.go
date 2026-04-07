@@ -242,7 +242,6 @@ func getTransfer(accountKeys []common.PublicKey, inst types.CompiledInstruction)
 			transfer.Amount = binary.LittleEndian.Uint64(inst.Data[1:10])
 			return transfer, nil
 		default:
-			errors.New("not found transfer instruction")
 			return nil, errors.New("not found transfer instruction")
 		}
 
