@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"myDex/myConsumer/internal/logic/entity"
+	"myDex/myConsumer/internal/logic/enum"
 	"myDex/pkg/constant"
 	"strings"
 
@@ -40,16 +41,16 @@ func NewPumpFunService() *PumpFunService {
 }
 
 // 解析pump指令
-func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) float64 {
+func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) *entity.TradeWithPair {
 
 	if txDecode.Instruction == nil {
-		return 0
+		return nil
 	}
 
 	instType, err := GetInstructionType(txDecode.Instruction.Data)
 	if err != nil {
 		p.Infof("decode instruction type is failed, err = %v", err)
-		return 0
+		return nil
 	}
 	//如果是买卖指令，从meta log中解析出event事件
 	if instType == constant.PumpBuyInstruction || instType == constant.PumpSellInstruction {
@@ -57,14 +58,15 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		price := txDecode.Price
 		tokenAccountMap := txDecode.TokenAccountMap
 		signature := txDecode.Signature
+		block := txDecode.Block
 
 		if len(txDecode.Instruction.Accounts) <= 5 {
 			p.Errorf("pump instruction accounts not enough, signature=%s len=%d", signature, len(txDecode.Instruction.Accounts))
-			return 0
+			return nil
 		}
 		if len(txDecode.AccountKeys) == 0 {
 			p.Errorf("pump account keys is empty, signature=%s", signature)
-			return 0
+			return nil
 		}
 		tokenAccountIndex := int(txDecode.Instruction.Accounts[5])
 		curveIndex := int(txDecode.Instruction.Accounts[3])
@@ -73,22 +75,22 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		if tokenAccountIndex >= len(txDecode.AccountKeys) {
 			p.Errorf("pump token account index out of range, signature=%s index=%d accountKeys=%d",
 				signature, tokenAccountIndex, len(txDecode.AccountKeys))
-			return 0
+			return nil
 		}
 		if curveIndex >= len(txDecode.AccountKeys) {
 			p.Errorf("pump bonding curve account index out of range, signature=%s index=%d accountKeys=%d",
 				signature, curveIndex, len(txDecode.AccountKeys))
-			return 0
+			return nil
 		}
 		if curveAtaIndex >= len(txDecode.AccountKeys) {
 			p.Errorf("pump bonding curve ata account index out of range, signature=%s index=%d accountKeys=%d",
 				signature, curveAtaIndex, len(txDecode.AccountKeys))
-			return 0
+			return nil
 		}
 		if walletIndx >= len(txDecode.AccountKeys) {
 			p.Errorf("pump wallet account index out of range, signature=%s index=%d accountKeys=%d",
 				signature, walletIndx, len(txDecode.AccountKeys))
-			return 0
+			return nil
 		}
 
 		//获取用户的token account
@@ -96,7 +98,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		if tokenAccount == nil {
 			p.Errorf("pump token account not found, signature=%s tokenAccount=%s",
 				signature, txDecode.AccountKeys[tokenAccountIndex].String())
-			return 0
+			return nil
 		}
 
 		//pump中的曲线状态账户，记录曲线变化的
@@ -108,25 +110,24 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 
 		var event *entity.PumpEvent
 
-
 		if len(txDecode.PumpEvents) == 0 {
 			events := p.DecodePumpEvents(txDecode.TranscationMeta.LogMessages)
 			evData, _ := json.Marshal(events)
 			fmt.Println("this trade event is ", string(evData))
 			if events == nil {
-				return 0
+				return nil
 			}
 			txDecode.PumpEvents = events
 			if txDecode.PumpEventIndex >= len(events) {
 				p.Errorf("pump event index out of range after decode, signature=%s index=%d events=%d",
 					signature, txDecode.PumpEventIndex, len(events))
-				return 0
+				return nil
 			}
 			event = events[txDecode.PumpEventIndex]
 
 		} else {
 			if txDecode.PumpEventIndex >= len(txDecode.PumpEvents) {
-				return 0
+				return nil
 			}
 			event = txDecode.PumpEvents[txDecode.PumpEventIndex]
 		}
@@ -136,51 +137,77 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		solAmount := event.SolAmount
 		tokenAmount := event.TokenAccount
 
-
 		//链上的原始数量转换为实际数量
 		realSolAccount := decimal.New(int64(solAmount), -constant.SolDecimal).InexactFloat64()
 		realTokenAccount := decimal.New(int64(tokenAmount), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
 		if realTokenAccount == 0 {
 			p.Errorf("pump real token account is zero, signature=%s", signature)
-			return 0
+			return nil
 		}
 
 		//计算token price
-		totalTokenAccount := decimal.NewFromFloat(realSolAccount).Mul(decimal.NewFromFloat(price)).InexactFloat64()
-		tokenPrice := decimal.NewFromFloat(totalTokenAccount).Div(decimal.NewFromFloat(realTokenAccount)).InexactFloat64()
+		totalUSD := decimal.NewFromFloat(realSolAccount).Mul(decimal.NewFromFloat(price)).InexactFloat64()
+		tokenPrice := decimal.NewFromFloat(totalUSD).Div(decimal.NewFromFloat(realTokenAccount)).InexactFloat64()
 
 		p.Infof("this transaction signature is %s, price is %f", signature, tokenPrice)
 
 		//获取流动性池子中token的流动性
 
 		//const TokenReservesDiff = 279900000000000 // Token虚拟储备量 - Token实际储备量
-		realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
-		realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
+		//realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
+		//realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
 
-		fmt.Println("token真实流动性：", realTokenReserves)
-		fmt.Println("sol真实流动性：", realSolReserves)
-		fmt.Println("pump曲线状态：", curve)
-		
+		//fmt.Println("token真实流动性：", realTokenReserves)
+		//fmt.Println("sol真实流动性：", realSolReserves)
 
+		currentTokenInPoolAmount := decimal.New(int64(event.VirtualTokenReserves), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
+		CurrentBaseTokenInPoolAmount := decimal.New(int64(event.VirtualSolReserves), -int32(constant.SolDecimal)).InexactFloat64()
 
-
-		trade := &entity.TradeWithPair{
-			ChainId: constant.SolChainId,
-			ChainIdInt: constant.SolChainIdInt,
-			Slot: txDecode.Block.Slot,
-			PairAddr: curveAccountAddress,
-			TxHash: txDecode.Signature,
-			Maker: walletAccountAddress,
-			Type: ,
-
+		var tradeType string
+		if event.IsBuy {
+			tradeType = enum.TradeTypeBuy.String()
+		} else {
+			tradeType = enum.TradeTypeSell.String()
 		}
 
+		trade := &entity.TradeWithPair{
+			ChainId:                      constant.SolChainId,
+			ChainIdInt:                   constant.SolChainIdInt,
+			Slot:                         txDecode.Block.Slot,
+			PairAddr:                     curveAccountAddress,
+			TxHash:                       txDecode.Signature,
+			Maker:                        walletAccountAddress,
+			Type:                         tradeType,
+			BaseTokenAmount:              realSolAccount,
+			TokenAmount:                  realTokenAccount,
+			TotalUSD:                     totalUSD,
+			BaseTokenPriceUSD:            price,
+			TokenPriceUSD:                tokenPrice,
+			To:                           curveAtaAccountAddress,
+			BlockNum:                     block.BlockHeight,
+			BlockTime:                    block.BlockTime.Unix(),
+			CurrentTokenInPoolAmount:     currentTokenInPoolAmount,
+			CurrentBaseTokenInPoolAmount: CurrentBaseTokenInPoolAmount,
+			PairInfo: entity.Pair{
+				ChainId: constant.SolChainId,
+				Addr:    curveAccountAddress,
 
+				BaseTokenAddr:       constant.Wsol,
+				TokenAddr:           tokenAccount.TokenMintAccountAddress,
+				BaseTokenSymbol:     "SOL",
+				BaseTokenDecimal:    9,
+				TokenDecimal:        tokenAccount.TokenDecimal,
+				InitTokenAmount:     constant.VirtualInitPumpTokenAmount,
+				InitBaseTokenAmount: constant.InitSolTokenAmount,
 
+				CurrentBaseTokenAmount: currentTokenInPoolAmount,
+				CurrentTokenAmount:     currentTokenInPoolAmount,
+			},
+		}
 
-		return tokenPrice
+		return trade
 	}
-	return 0
+	return nil
 }
 
 // 解析pump event事件

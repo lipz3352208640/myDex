@@ -23,6 +23,8 @@ type ServiceContext struct {
 	Config     config.Config
 	solClients []*client.Client
 	BlockModel solmodel.BlockModel
+	TokenModel solmodel.TokenModel
+	PairModel  solmodel.PairModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -73,5 +75,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:     c,
 		solClients: solClients,
 		BlockModel: solmodel.NewBlockModel(db),
+		TokenModel: solmodel.NewTokenModel(db),
+		PairModel:  solmodel.NewPairModel(db),
 	}
 }

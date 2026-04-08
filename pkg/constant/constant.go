@@ -26,6 +26,14 @@ const (
 	TokenReservesDiff = 279900000000000
 	//sol 虚拟流动量和真实流动量的差值
 	SolReservesDiff = 30000000000
+
+	//pumpfun 池子初始化的Token数量
+	VirtualInitPumpTokenAmount = 1073000191
+	//pumpfun 池子初始化的Sol数量
+	InitSolTokenAmount = 0.015
+
+	//
+	PumpFunName = "PumpFun"
 )
 
 const (

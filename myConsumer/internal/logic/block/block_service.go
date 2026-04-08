@@ -32,6 +32,7 @@ type BlockService struct {
 	slotChan       chan uint64
 	goroutineCount int
 	pumpService    *PumpFunService
+	tradeService   TradeService
 }
 
 func NewBlockService(sc *svc.ServiceContext, slotChan chan uint64, name string, count int) *BlockService {
@@ -55,6 +56,7 @@ func NewBlockService(sc *svc.ServiceContext, slotChan chan uint64, name string, 
 		slotChan:       slotChan,
 		goroutineCount: count,
 		pumpService:    NewPumpFunService(),
+		tradeService:   NewTradeService(sc),
 	}
 }
 
@@ -86,6 +88,7 @@ func (b *BlockService) ConsumeSlot(workID int) {
 func (b *BlockService) Stop() {
 	b.Info("stop block service")
 	b.cancle(errors.New("stop block service"))
+	b.tradeService.Stop()
 }
 
 func (b *BlockService) handleTransacton(slot uint64, workID int) {
@@ -153,13 +156,6 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		dbBlock.BlockTime = time.Now()
 	}
 
-	//入库
-	dbBlock.Status = constant.BlockProcessed
-	if insertErr := b.saveOrUpdateSlot(dbBlock); insertErr != nil {
-		b.Errorf("[work-%d] insert or update processed block fail, slot=%d err=%v", workID, slot, insertErr)
-		return
-	}
-
 	//获取交易价格
 	tokenAccountMap, price := GetSolPrice(block, dbBlock, b)
 
@@ -176,8 +172,21 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		Slot:            slot,
 	}
 
-	//解析交易指令
-	b.parseTxInstruction(block, txDecode, workID)
+	//解析交易指令,封装trade实体
+	trades := b.parseTxInstruction(block, txDecode, workID)
+	if trades != nil {
+		gp := threading.NewRoutineGroup()
+		gp.RunSafe(func() {
+			b.tradeService.SaveTrades(trades)
+		})
+	}
+
+	//入库
+	dbBlock.Status = constant.BlockProcessed
+	if insertErr := b.saveOrUpdateSlot(dbBlock); insertErr != nil {
+		b.Errorf("[work-%d] insert or update processed block fail, slot=%d err=%v", workID, slot, insertErr)
+		return
+	}
 
 }
 
@@ -191,24 +200,25 @@ func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {
 	return err
 }
 
-func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDecodeEntity, workID int) {
+func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDecodeEntity, workID int) []*entity.TradeWithPair {
+	var trades []*entity.TradeWithPair
 	for _, transcation := range block.Transactions {
 		select {
 		case <-b.ctx.Done():
-			return
+			return nil
 		default:
 		}
 
 		if transcation.Meta == nil || transcation.Meta.Err != nil {
 			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
-			return
+			return nil
 		}
 
 		instructions := transcation.Transaction.Message.Instructions
 
 		if len(transcation.Transaction.Signatures) == 0 {
 			logx.Errorf("[work-%d] transaction signature is entity, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
-			return
+			return nil
 		}
 
 		tx.Signature = base58.Encode(transcation.Transaction.Signatures[0])
@@ -226,11 +236,10 @@ func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDeco
 						workID, tx.Slot, len(block.Signatures))
 
 					tx.Instruction = &instruction
-					price := b.pumpService.DecodePumpTranscation(tx)
+					trade := b.pumpService.DecodePumpTranscation(tx)
 					//pumpData, err := b.ParsePumpInstruction(transcation.Transaction.Message.Header, accountKeys, instruction)
-					if price == 0 {
-						b.Errorf("[work-%d] parse pump instruction token price, slot=%d", workID, tx.Slot)
-						return
+					if trade != nil {
+						trades = append(trades, trade)
 					}
 					//b.Infof("[work-%d] parsed pump data: %s", workID, pumpData)
 				default:
@@ -240,6 +249,7 @@ func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDeco
 
 		}
 	}
+	return trades
 }
 
 func (b *BlockService) GetSolBlockInfo(slot uint64) (*client.Block, error) {

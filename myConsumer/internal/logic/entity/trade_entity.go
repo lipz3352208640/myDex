@@ -29,8 +29,8 @@ type TradeWithPair struct {
 	// KlineUpDown4h  float64 `json:"kline_up_down_4h"`  // 4-hour price change, used for pushing to websocket
 	// KlineUpDown6h  float64 `json:"kline_up_down_6h"`  // 6-hour price change, used for pushing to websocket
 	// KlineUpDown24h float64 `json:"kline_up_down_24h"` // 24-hour price change, used for pushing to websocket
-	// Fdv            float64 `json:"fdv"`               // Market cap, used for pushing to websocket
-	// Mcap           float64 `json:"mcap"`              // Circulating market cap
+	Fdv  float64 `json:"fdv"`  // Market cap, used for pushing to websocket
+	Mcap float64 `json:"mcap"` // Circulating market cap
 
 	// TokenAmountInt     int64 `json:"token_amount_int"` // Not divided by decimal
 	// BaseTokenAmountInt int64 `json:"base_token_amount_int"`
@@ -56,7 +56,7 @@ type TradeWithPair struct {
 	PairInfo Pair `json:"pair_info"`
 }
 
-// 交易对对象
+// 池子交易对对象
 type Pair struct {
 	ChainId string `json:"chain_id"` //链id
 	Addr    string `json:"addr"`     //池子或者价格曲线状态账户地址
@@ -71,8 +71,8 @@ type Pair struct {
 	BaseTokenIsToken0      bool   `json:"base_token_is_token_0"`      //基础代币是否对应pair中的token0
 
 	TokenTotalSupply    float64 `json:"token_total_supply"`     // 代币总供应量
-	InitTokenAmount     float64 `json:"init_token_amount"`      // 初始化代币数量
-	InitBaseTokenAmount float64 `json:"init_base_token_amount"` // 初始化基础代币数量
+	InitTokenAmount     float64 `json:"init_token_amount"`      // 池子初始化代币数量
+	InitBaseTokenAmount float64 `json:"init_base_token_amount"` // 池子初始化基础代币数量
 
 	Name string `json:"name"` //交易名。属于哪个dex平台
 
