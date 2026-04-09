@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package trade;
+option go_package="./trade";
+
+message Request {
+  string ping = 1;
+}
+
+message Response {
+  string pong = 1;
+}
+
+//用户下单后，传入到后端的参数
+message MarketOrderRequest {
+  //链id
+  int32 chain_id = 1;
+  //token 地址
+  string token_ca = 2;
+  //交易类型
+  SwapType swap_type = 3;
+  //输入数量
+  string amount_in = 4;
+  //是否翻倍出本
+  bool is_double_out = 5;
+  //是否一键卖出
+  bool is_one_click = 6;
+  //钱包地址
+  string user_wallet_address = 7;
+}
+
+
+enum SwapType {
+  SwapTypeAll = 0;
+  Buy = 1;
+  Sell = 2;
+}
+
+message MarketOrderResponse {
+  string tx_hash = 1;
+}
+
+service Trade {
+  rpc Ping(Request) returns(Response);
+  rpc CreateMarketOrder(MarketOrderRequest) returns(MarketOrderResponse);
+}

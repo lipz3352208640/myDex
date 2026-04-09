@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package market;
+option go_package="./market";
+
+message Request {
+  string ping = 1;
+}
+
+message Response {
+  string pong = 1;
+}
+
+message PairInfoRequest {
+  int64 chain_id = 1;
+  string tokenAddr = 2;
+}
+
+message PairInfo {
+  int64 chain_id = 1;  // Chain ID
+  string address = 2;  // Trading pair address
+  string name = 3;  // DEX factory version swap name
+  string factory_address = 4;  // Factory contract address
+  string base_token_address = 5;  // Base token address
+  string token_address = 6;  // Token address
+  string base_token_symbol = 7;  // Base token symbol
+  string token_symbol = 8;  // Token symbol
+  int64 base_token_decimal = 9;  // Base token decimals
+  int64 token_decimal = 10;  // Token decimals
+  bool base_token_is_native_token = 11;  // Is base token native currency
+  bool base_token_is_token0 = 12;  // Is base token token0
+  double init_base_token_amount = 13;  // Initial base token liquidity
+  double init_token_amount = 14;  // Initial token liquidity
+  double current_base_token_amount = 15;  // Current base token liquidity
+  double current_token_amount = 16;  // Current token liquidity
+  double fdv = 17;  // Fully diluted valuation
+  double mkt_cap = 18;  // Market capitalization
+  double token_price = 19;  // Token price
+  double base_token_price = 20;  // Base token price
+  int64 block_num = 21;  // Creation block height
+  int64 block_time = 22;  // Creation block timestamp
+  double highest_token_price = 23;  // Highest token price
+  int64 latest_trade_time = 24;  // Latest on-chain trade timestamp
+}
+
+
+
+service Market {
+  rpc Ping(Request) returns(Response);
+  rpc FindMaxSupplyPairInfoByTokenAddrAndChainID(PairInfoRequest) returns(PairInfo);
+}

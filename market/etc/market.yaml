@@ -1,0 +1,13 @@
+Name: market.rpc
+ListenOn: 0.0.0.0:8080
+# Etcd:
+#   Hosts:
+#   - 127.0.0.1:2379
+#   Key: market.rpc
+
+Mysql:
+  User: root
+  Password: "123456"
+  Host: 47.239.81.141
+  Port: 3306
+  Dbname: fun_dex
