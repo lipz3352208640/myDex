@@ -200,8 +200,11 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 				InitTokenAmount:     constant.VirtualInitPumpTokenAmount,
 				InitBaseTokenAmount: constant.InitSolTokenAmount,
 
-				CurrentBaseTokenAmount: currentTokenInPoolAmount,
+				CurrentBaseTokenAmount: CurrentBaseTokenInPoolAmount,
 				CurrentTokenAmount:     currentTokenInPoolAmount,
+
+				BlockNum:  block.BlockHeight,
+				BlockTime: block.BlockTime.Unix(),
 			},
 		}
 

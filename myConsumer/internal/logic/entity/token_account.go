@@ -21,13 +21,21 @@ type TokenAccount struct {
 }
 
 type TokenUriData struct {
-	Twitter     string `json:"twitter"`
-	Website     string `json:"website"`
-	Telegram    string `json:"telegram"`
-	Name        string `json:"name"`
-	Image       string `json:"image"`
-	Symbol      string `json:"symbol"`
-	Description string `json:"description"`
+	Twitter     string     `json:"twitter"`
+	Website     string     `json:"website"`
+	Telegram    string     `json:"telegram"`
+	Name        string     `json:"name"`
+	Image       string     `json:"image"`
+	Symbol      string     `json:"symbol"`
+	Description string     `json:"description"`
+	Extensions  Extensions `json:"extensions"`
+}
+
+// Extensions 结构体
+type Extensions struct {
+	Website  string `json:"website"`
+	Twitter  string `json:"twitter"`
+	Telegram string `json:"telegram"`
 }
 
 type TokenInfo struct {

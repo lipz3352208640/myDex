@@ -34,7 +34,6 @@ type TradeServiceImpl struct {
 }
 
 func (t *TradeServiceImpl) SaveTrades(trades []*entity.TradeWithPair) error {
-
 	validTrades := lo.Filter(trades, func(trade *entity.TradeWithPair, _ int) bool {
 		if trade == nil {
 			return false
@@ -65,7 +64,7 @@ func (t *TradeServiceImpl) SaveTrades(trades []*entity.TradeWithPair) error {
 					return trade.TxHash
 				})
 				t.Info("current trade transcation is %v", txHashList)
-				BatchSaveByTrade(trades)
+				t.BatchSaveByTrade(trades)
 			}
 		}(key, trades))
 	}
@@ -86,17 +85,27 @@ func (t *TradeServiceImpl) BatchSaveByTrade(trades []*entity.TradeWithPair) {
 	}
 
 	for _, trade := range trades {
-		token, err := t.tokenService.SaveToken(trade)
+		tokenDb, err := t.tokenService.SaveToken(trade)
 		if err != nil {
 			t.Errorf("BatchSaveByTrade:SaveToken err is %w", err)
 		}
+		if tokenDb.TotalSupply == 0 {
+			t.Errorf("trade PairInfo token totalSupply is 0, tokenDb: %#v ", tokenDb)
+		} else {
+			trade.PairInfo.TokenTotalSupply = tokenDb.TotalSupply
+		}
 
-		t.SavePair(t.ctx, trade, token)
+		_, err = t.SavePair(t.ctx, trade, tokenDb)
+		if err != nil {
+			t.Errorf("BatchSaveByTrade:SavePair err is %w", err)
+		}
+
 	}
+	fmt.Println("save BatchSaveByTrade successful")
 
 }
 
-func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWithPair, tokenDb *solmodel.Token) (*solmodel.Pair, error) {
+func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWithPair, tokenDb *solmodel.Token) (pairAtDB *solmodel.Pair, err error) {
 
 	//chainID 转换为int
 	chainInt, _ := strconv.ParseInt(trade.ChainId, 10, 64)
@@ -110,15 +119,13 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 		tokenSymbol = tokenDb.Symbol
 	}
 
-	pairAtDB, err := t.sc.PairModel.FindOneByChainIdAddress(ctx, chainInt, trade.PairAddr)
+	pairAtDB, err = t.sc.PairModel.FindOneByChainIdAddress(ctx, chainInt, trade.PairAddr)
 	//默认流动性计算：当前池子a代币数量*a的价格 + 当前池子b代币数量*b的价格
 	liq := trade.CurrentBaseTokenInPoolAmount*trade.BaseTokenPriceUSD + trade.CurrentTokenInPoolAmount*trade.TokenPriceUSD
 	if trade.SwapName == constant.PumpFunName {
 		//如果是pump 池子双边价值相等
 		liq = trade.CurrentBaseTokenInPoolAmount * trade.BaseTokenPriceUSD * 2
 		t.Infof("SavePair: calculated liquidity (PumpFun formula) for pair %v: liq=%v, CurrentBaseTokenInPoolAmount=%v, BaseTokenPriceUSD=%v", trade.PairAddr, liq, trade.CurrentBaseTokenInPoolAmount, trade.BaseTokenPriceUSD)
-	} else {
-		t.Infof("SavePair: calculated liquidity (standard formula) for pair %v: liq=%v, CurrentBaseTokenInPoolAmount=%v, BaseTokenPriceUSD=%v, CurrentTokenInPoolAmount=%v, TokenPriceUSD=%v", trade.PairAddr, liq, trade.CurrentBaseTokenInPoolAmount, trade.BaseTokenPriceUSD, trade.CurrentTokenInPoolAmount, trade.TokenPriceUSD)
 	}
 
 	switch {
@@ -169,7 +176,7 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 			// PumpVirtualTokenReserves:     trade.PumpVirtualTokenReserves,
 			// PumpStatus:                   int64(trade.PumpStatus),
 			// PumpPairAddr:                 trade.PumpPairAddr,
-			// LatestTradeTime:              time.Unix(trade.PairInfo.BlockTime, 0),
+			LatestTradeTime: time.Unix(trade.PairInfo.BlockTime, 0),
 		}
 
 		trade.Mcap = pairAtDB.MktCap
@@ -193,6 +200,7 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 			err = fmt.Errorf("PairModel.Insert err:%w", err)
 			return nil, err
 		}
+		t.Infof("pairAtDB insert successful, pairAtDB:%#v", pairAtDB)
 		// TODO: add token cache
 		// token.TokenSnapCache.Update(int(100000), pairAtDB.TokenAddress, trade.TokenPriceUSD)
 	case err == nil:
@@ -206,6 +214,7 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 	trade.Mcap = pairAtDB.MktCap
 	trade.Fdv = pairAtDB.Fdv
 
+	//trade存储的是当前交易的快照，保证了实时性，不允许旧数据覆盖覆盖
 	if trade.Slot > pairAtDB.Slot {
 		// s.Infof("SavePair will UpdatePairDBPoint slot: %v, db slot: %v, hash: %v, pair address: %v", trade.Slot, pairAtDB.Slot, trade.TxHash, trade.PairAddr)
 
@@ -226,8 +235,7 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 		pairAtDB.BlockNum = trade.PairInfo.BlockNum
 		err = UpdatePairDBPoint(trade, pairAtDB, tokenTotalSupply)
 		if err != nil {
-			err = fmt.Errorf("UpdatePairDBPoint err:%w", err)
-			return
+			t.Errorf("SavePair:UpdatePairDBPoint err is %w", err)
 		}
 
 		trade.Mcap = pairAtDB.MktCap
@@ -236,8 +244,9 @@ func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWith
 		err = t.sc.PairModel.Update(ctx, pairAtDB)
 		if err != nil {
 			err = fmt.Errorf("PairModel.Update err:%w", err)
-			return
+			t.Errorf("SavePair:UpdatePairDBPoint err is %w", err)
 		}
+		t.Infof("pairAtDB update successful, pairAtDB:%#v", pairAtDB)
 	}
 
 	return
@@ -300,7 +309,7 @@ func UpdatePairDBPoint(trade *entity.TradeWithPair, pairDB *solmodel.Pair, token
 	pairDB.LatestTradeTime = time.Unix(tradeTime, 0)
 
 	// Calculate market cap based on the current liquidity and prices.
-	if pairDB.Name == constants.PumpFun {
+	if pairDB.Name == constant.PumpFunName {
 		pairDB.Liquidity = decimal.NewFromFloat(baseTokenPriceUSD).Mul(decimal.NewFromFloat(pairDB.CurrentBaseTokenAmount)).Mul(decimal.NewFromFloat(2)).InexactFloat64()
 	} else {
 		pairDB.Liquidity = decimal.NewFromFloat(tokenPriceUSD).Mul(decimal.NewFromFloat(pairDB.CurrentTokenAmount)).

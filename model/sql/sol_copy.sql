@@ -87,8 +87,8 @@ CREATE TABLE `pair` (
   `init_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Initial token liquidity',--池子初始化token 数量 
   `current_base_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Current base token liquidity',--当前池子base token流动性
   `current_token_amount` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Current token liquidity',--当前池子token流动性
-  `fdv` double NOT NULL DEFAULT '0' COMMENT 'Fully diluted valuation',--完全稀释估值
-  `mkt_cap` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Market capitalization',--市值
+  `fdv` double NOT NULL DEFAULT '0' COMMENT 'Fully diluted valuation',--完全流通市值 按照“总供应量”算  FDV = 当前 token 单价 × 总发行量
+  `mkt_cap` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Market capitalization',--市值 按照“流通供应量”算 mkt_cap = 当前 token 单价 × 当前流通量
   `token_price` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Token price',--当前token价格
   `base_token_price` decimal(64,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'Base token price',--当前base token价格
   `block_num` int NOT NULL DEFAULT '0' COMMENT 'Creation block height',--区块号

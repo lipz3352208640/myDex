@@ -174,6 +174,7 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 
 	//解析交易指令,封装trade实体
 	trades := b.parseTxInstruction(block, txDecode, workID)
+	fmt.Println("trade 长度", len(trades))
 	if trades != nil {
 		gp := threading.NewRoutineGroup()
 		gp.RunSafe(func() {
@@ -211,14 +212,14 @@ func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDeco
 
 		if transcation.Meta == nil || transcation.Meta.Err != nil {
 			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
-			return nil
+			continue 
 		}
 
 		instructions := transcation.Transaction.Message.Instructions
 
 		if len(transcation.Transaction.Signatures) == 0 {
 			logx.Errorf("[work-%d] transaction signature is entity, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
-			return nil
+			continue
 		}
 
 		tx.Signature = base58.Encode(transcation.Transaction.Signatures[0])

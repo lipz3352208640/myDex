@@ -75,6 +75,7 @@ func (t *TokenServiceImpl) SaveToken(trade *entity.TradeWithPair) (tokenDB *solm
 		}
 
 		//合约不存在
+		var program common.PublicKey
 		if len(tokenDB.Program) == 0 {
 			program, _ := GetTokenProgram(t.c, t.ctx, tokenDB.Address)
 			switch program {
@@ -155,6 +156,8 @@ func (t *TokenServiceImpl) SaveToken(trade *entity.TradeWithPair) (tokenDB *solm
 			if err != nil {
 				return tokenDB, err
 			}
+			t.Infof("SaveToken:GetTokenInfo update success address: %v, token: %#v, program: %v", tokenDB.Address, tokenDB, program)
+
 		}
 		return tokenDB, nil
 	}
@@ -382,16 +385,16 @@ func GetTokenInfo(c *client.Client, ctx context.Context, address string) (tokenI
 				return tokenInfo, nil
 			}
 
-			fmt.Println("meta json 内容", string(res))
+			fmt.Println("meta json content", string(res))
 
 			if len(tokenUriData.Website) == 0 {
-				tokenUriData.Website = tokenUriData.Website
+				tokenUriData.Website = tokenUriData.Extensions.Website
 			}
 			if len(tokenUriData.Telegram) == 0 {
-				tokenUriData.Telegram = tokenUriData.Telegram
+				tokenUriData.Telegram = tokenUriData.Extensions.Telegram
 			}
 			if len(tokenUriData.Twitter) == 0 {
-				tokenUriData.Twitter = tokenUriData.Twitter
+				tokenUriData.Twitter = tokenUriData.Extensions.Twitter
 			}
 			tokenInfo.Uri = tokenUriData
 		} else if strings.HasPrefix(contentType, "image/") {
@@ -407,13 +410,13 @@ func GetTokenInfo(c *client.Client, ctx context.Context, address string) (tokenI
 			}
 
 			if len(tokenUriData.Website) == 0 {
-				tokenUriData.Website = tokenUriData.Website
+				tokenUriData.Website = tokenUriData.Extensions.Website
 			}
 			if len(tokenUriData.Telegram) == 0 {
-				tokenUriData.Telegram = tokenUriData.Telegram
+				tokenUriData.Telegram = tokenUriData.Extensions.Telegram
 			}
 			if len(tokenUriData.Twitter) == 0 {
-				tokenUriData.Twitter = tokenUriData.Twitter
+				tokenUriData.Twitter = tokenUriData.Extensions.Twitter
 			}
 
 			tokenInfo.Uri = tokenUriData
@@ -438,7 +441,7 @@ func GetToken2022Info(c *ag_rpc.Client, ctx context.Context, address solana.Publ
 		return nil, nil, err
 	}
 
-	fmt.Println("token 2022  json ", string(resp.Value.Data.GetRawJSON()))
+	fmt.Println("token 2022 json ", string(resp.Value.Data.GetRawJSON()))
 
 	mintResponse, err := Byte2Struct[*entity.MintResponse](resp.Value.Data.GetRawJSON())
 	if err != nil {
@@ -495,13 +498,13 @@ func GetToken2022Info(c *ag_rpc.Client, ctx context.Context, address solana.Publ
 					}
 
 					if len(tokenUriData.Website) == 0 {
-						tokenUriData.Website = tokenUriData.Website
+						tokenUriData.Website = tokenUriData.Extensions.Website
 					}
 					if len(tokenUriData.Telegram) == 0 {
-						tokenUriData.Telegram = tokenUriData.Telegram
+						tokenUriData.Telegram = tokenUriData.Extensions.Telegram
 					}
 					if len(tokenUriData.Twitter) == 0 {
-						tokenUriData.Twitter = tokenUriData.Twitter
+						tokenUriData.Twitter = tokenUriData.Extensions.Twitter
 					}
 
 					tokenInfo.Uri = tokenUriData
@@ -522,13 +525,13 @@ func GetToken2022Info(c *ag_rpc.Client, ctx context.Context, address solana.Publ
 					}
 
 					if len(tokenUriData.Website) == 0 {
-						tokenUriData.Website = tokenUriData.Website
+						tokenUriData.Website = tokenUriData.Extensions.Website
 					}
 					if len(tokenUriData.Telegram) == 0 {
-						tokenUriData.Telegram = tokenUriData.Telegram
+						tokenUriData.Telegram = tokenUriData.Extensions.Telegram
 					}
 					if len(tokenUriData.Twitter) == 0 {
-						tokenUriData.Twitter = tokenUriData.Twitter
+						tokenUriData.Twitter = tokenUriData.Extensions.Twitter
 					}
 
 					tokenInfo.Uri = tokenUriData
