@@ -44,7 +44,7 @@ func (t *TradeServiceImpl) SaveTrades(trades []*entity.TradeWithPair) error {
 		if trade.BaseTokenPriceUSD == 0 {
 			return false
 		}
-		if "" == trade.Type || trade.Type != enum.TradeTypeBuy.String() && trade.Type != enum.TradeTypeBuy.String() {
+		if "" == trade.Type || (trade.Type != enum.TradeTypeBuy.String() && trade.Type != enum.TradeTypeBuy.String()) {
 			return false
 		}
 		return true

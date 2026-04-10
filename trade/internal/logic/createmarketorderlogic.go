@@ -2,11 +2,16 @@ package logic
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 
 	"myDex/market/market"
 	"myDex/model/solmodel"
+	"myDex/pkg/constant"
 	"myDex/pkg/xcode"
 	"myDex/trade/internal/enum"
+	"myDex/trade/internal/logic/entity"
 	"myDex/trade/internal/svc"
 	"myDex/trade/trade"
 
@@ -90,12 +95,45 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		TokenAddr: in.TokenCa,
 	})
 	if err != nil {
-		l.Errorf("get pairInfo err is %w", err.Error())
+		l.Errorf("get pairInfo err is %v", err.Error())
 		return nil, xcode.ServerErr
 	}
+	//如果当前流动池中的base token价格缺失，获取该base token的最近成交价
+	baseTokenPrice := pairInfo.BaseTokenPrice
+	tokenPrice := pairInfo.BaseTokenPrice
+	if decimal.NewFromFloat(pairInfo.BaseTokenPrice).IsZero() {
+		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearBaseTokenPrice(l.ctx, &market.BaseTokenPriceRequest{
+			ChainId:       int64(in.ChainId),
+			BaseTokenAddr: pairInfo.BaseTokenAddress,
+		})
+		if err != nil {
+			return nil, err
+		}
 
-	solPriceDecimal := decimal.NewFromFloat(pairInfo.BaseTokenPrice)
-	tokenPriceDecimal := decimal.NewFromFloat(pairInfo.TokenPrice)
+		if baseTokenPriceResp.BaseTokenPrice == 0 {
+			return nil, xcode.PoolLiquidityNotEnough
+		}
+		baseTokenPrice = baseTokenPriceResp.BaseTokenPrice
+
+	}
+
+	if decimal.NewFromFloat(pairInfo.TokenPrice).IsZero() {
+		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearTokenPrice(l.ctx, &market.TokenPriceRequest{
+			ChainId:       int64(in.ChainId),
+			TokenAddr:     pairInfo.TokenAddress,
+			BaseTokenAddr: pairInfo.BaseTokenAddress,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if baseTokenPriceResp.TokenPrice == 0 {
+			return nil, xcode.PoolLiquidityNotEnough
+		}
+		tokenPrice = baseTokenPriceResp.TokenPrice
+	}
+
+	solPriceDecimal := decimal.NewFromFloat(baseTokenPrice)
+	tokenPriceDecimal := decimal.NewFromFloat(tokenPrice)
 	//挂单价格 1个token兑换几个sol
 	orderPriceBase := tokenPriceDecimal.Div(solPriceDecimal)
 	//挂单数量(基于sol) sell: 卖出的token * orderPriceBase   buy：下单的数量
@@ -104,7 +142,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		orderValueBase = orderPriceBase.Mul(amountInDecimal)
 	}
 
-	var isAutoSlippage int64 = 0
+	var isAutoSlippage int64 = 1
 	var isAntiMev int64 = 0
 
 	tradeOrder := &solmodel.TradeOrder{
@@ -137,7 +175,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		return nil, xcode.ServerErr
 	}
 
-	txhash,err := CreateMarketTx(tradeOrder, pairInfo)
+	txhash, err := CreateMarketTx(tradeOrder, pairInfo, in)
 	if err != nil {
 		l.Errorf("acquire tx hash err:%s", err.Error())
 		return nil, xcode.ServerErr
@@ -160,6 +198,141 @@ func BoolToInt64(b bool) int64 {
 	return 0
 }
 
-func CreateMarketTx(order *solmodel.TradeOrder, pairInfo *market.PairInfo) (txHash string, err error) {
+// 创建市单交易
+func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pairInfo *market.PairInfo, in *trade.MarketOrderRequest) (string, error) {
+	var err error
+	defer func() {
+		// 如果订单状态是触发中 并且有错误，那么将订单状态改为失败
+		if order.Status == int64(enum.OrderStatus_Proc) && err != nil {
+			err2 := l.updateDbByTxResult(order, nil, "", err)
+			if err2 != nil {
+				l.Errorf("update order err err is %v", err2)
+			}
+		}
+	}()
 
+	inProgrmID, outProgramID, err := l.getTokenProgramID(pairInfo, in.SwapType)
+
+	if err != nil {
+		return "", err
+	}
+
+	inBaseTokenAddree := pairInfo.BaseTokenAddress
+	outTokenAddree := pairInfo.TokenAddress
+	outTokenDecimal := pairInfo.TokenDecimal
+	inBaseTokenDecimal := pairInfo.BaseTokenDecimal
+	if in.SwapType == trade.SwapType_Sell {
+		inBaseTokenAddree = pairInfo.TokenAddress
+		outTokenAddree = pairInfo.BaseTokenAddress
+		inBaseTokenDecimal = pairInfo.TokenDecimal
+		outTokenDecimal = pairInfo.BaseTokenDecimal
+	}
+
+	param := &entity.MarketTx{
+		UserId:            uint64(order.Uid),
+		UserWalletId:      uint32(order.WalletIndex),
+		UserWalletAddress: in.UserWalletAddress,
+		InTokenProgram:    inProgrmID,
+		OutTokenProgram:   outProgramID,
+		InDecimal:         uint8(inBaseTokenDecimal),
+		OutDecimal:        uint8(outTokenDecimal),
+		InTokenCa:         inBaseTokenAddree,
+		OutTokenCa:        outTokenAddree,
+		IsAntiMev:         order.IsAntiMev == 1,
+		IsAutoSlippage:    order.IsAutoSlippage == 1,
+		Slippage:          uint32(order.Slippage),
+		SwapType:          int32(in.SwapType),
+		TradePoolName:     pairInfo.Name,
+		AmountIn:          in.AmountIn,
+		Price:             order.OrderPriceBase.String(),
+		PairAddr:          pairInfo.Address,
+	}
+
+	//如果选择开启自动滑点，如果设置过小，增大滑点重试
+	tryTimes := 0
+	for tryTimes == 0 || (order.IsAutoSlippage == 1 && errors.Is(err, xcode.SlippageLimit) && tryTimes < 3) {
+		tryTimes++
+		switch tryTimes {
+		case 1:
+		case 2:
+			order.Slippage = 4500
+			l.Info("AutoSlippageRetry")
+		case 3:
+			order.Slippage = 7000
+			l.Info("AutoSlippageRetry")
+		}
+		txHash, err = l.createAndSendTx(param)
+		if err != nil {
+			err = convertSwapErr(pairInfo.Name, err)
+		}
+	}
+
+}
+
+func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) {
+	chainId := marketTx.ChainId
+	if chainId == constant.SolChainIdInt {
+		l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
+	}
+}
+
+func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, swapType trade.SwapType) (string, string, error) {
+
+	//获取in和out token的合于地址，用于创建ata账户指令
+	inTokenAddree := pairInfo.BaseTokenAddress
+	outTokenAddree := pairInfo.TokenAddress
+	if swapType == trade.SwapType_Sell {
+		inTokenAddree = pairInfo.TokenAddress
+		outTokenAddree = pairInfo.BaseTokenAddress
+	}
+	outTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(l.ctx, &market.TokenInfoRequest{
+		ChainId:   pairInfo.ChainId,
+		TokenAddr: outTokenAddree,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if len(outTokenInfo.Program) == 0 {
+		return "", "", fmt.Errorf("get token program is empty")
+	}
+
+	inTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(l.ctx, &market.TokenInfoRequest{
+		ChainId:   pairInfo.ChainId,
+		TokenAddr: inTokenAddree,
+	})
+	if err != nil {
+		return "", "", err
+	}
+	if len(inTokenInfo.Program) == 0 {
+		return "", "", fmt.Errorf("get token program is empty")
+	}
+	return inTokenInfo.Program, outTokenInfo.Program, nil
+}
+
+func (l *CreateMarketOrderLogic) updateDbByTxResult() {
+
+}
+
+func convertSwapErr(poolName string, err error) error {
+	result := err.Error()
+	if strings.Contains(result, "liquidity") {
+		return xcode.PoolLiquidityNotEnough
+	}
+	if strings.Contains(result, "insufficient") {
+		return xcode.BalanceNotEnough
+	}
+	if strings.Contains(result, "frozen") {
+		return xcode.TokenAccountFrozen
+	}
+	if strings.Contains(result, "slippage") || strings.Contains(result, "TooLittleOutputReceived") {
+		return xcode.SlippageLimit
+	}
+	switch poolName {
+	case constant.PumpFunName:
+		if strings.Contains(result, "TooLittleSolReceived") || strings.Contains(result, "attempt to subtract with overflow") {
+			return xcode.PumpPoolZeroErr
+		}
+	default:
+	}
+	return err
 }

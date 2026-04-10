@@ -21,6 +21,9 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Market_Ping_FullMethodName                                       = "/market.Market/Ping"
 	Market_FindMaxSupplyPairInfoByTokenAddrAndChainID_FullMethodName = "/market.Market/FindMaxSupplyPairInfoByTokenAddrAndChainID"
+	Market_FindNearTokenPrice_FullMethodName                         = "/market.Market/FindNearTokenPrice"
+	Market_FindNearBaseTokenPrice_FullMethodName                     = "/market.Market/FindNearBaseTokenPrice"
+	Market_FindTokenInfo_FullMethodName                              = "/market.Market/FindTokenInfo"
 )
 
 // MarketClient is the client API for Market service.
@@ -29,6 +32,9 @@ const (
 type MarketClient interface {
 	Ping(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Context, in *PairInfoRequest, opts ...grpc.CallOption) (*PairInfo, error)
+	FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error)
+	FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error)
+	FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error)
 }
 
 type marketClient struct {
@@ -59,12 +65,45 @@ func (c *marketClient) FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Co
 	return out, nil
 }
 
+func (c *marketClient) FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPriceResponse)
+	err := c.cc.Invoke(ctx, Market_FindNearTokenPrice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketClient) FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseTokenPriceResponse)
+	err := c.cc.Invoke(ctx, Market_FindNearBaseTokenPrice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *marketClient) FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenInfoResponse)
+	err := c.cc.Invoke(ctx, Market_FindTokenInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServer is the server API for Market service.
 // All implementations must embed UnimplementedMarketServer
 // for forward compatibility.
 type MarketServer interface {
 	Ping(context.Context, *Request) (*Response, error)
 	FindMaxSupplyPairInfoByTokenAddrAndChainID(context.Context, *PairInfoRequest) (*PairInfo, error)
+	FindNearTokenPrice(context.Context, *TokenPriceRequest) (*TokenPriceResponse, error)
+	FindNearBaseTokenPrice(context.Context, *BaseTokenPriceRequest) (*BaseTokenPriceResponse, error)
+	FindTokenInfo(context.Context, *TokenInfoRequest) (*TokenInfoResponse, error)
 	mustEmbedUnimplementedMarketServer()
 }
 
@@ -80,6 +119,15 @@ func (UnimplementedMarketServer) Ping(context.Context, *Request) (*Response, err
 }
 func (UnimplementedMarketServer) FindMaxSupplyPairInfoByTokenAddrAndChainID(context.Context, *PairInfoRequest) (*PairInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method FindMaxSupplyPairInfoByTokenAddrAndChainID not implemented")
+}
+func (UnimplementedMarketServer) FindNearTokenPrice(context.Context, *TokenPriceRequest) (*TokenPriceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindNearTokenPrice not implemented")
+}
+func (UnimplementedMarketServer) FindNearBaseTokenPrice(context.Context, *BaseTokenPriceRequest) (*BaseTokenPriceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindNearBaseTokenPrice not implemented")
+}
+func (UnimplementedMarketServer) FindTokenInfo(context.Context, *TokenInfoRequest) (*TokenInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindTokenInfo not implemented")
 }
 func (UnimplementedMarketServer) mustEmbedUnimplementedMarketServer() {}
 func (UnimplementedMarketServer) testEmbeddedByValue()                {}
@@ -138,6 +186,60 @@ func _Market_FindMaxSupplyPairInfoByTokenAddrAndChainID_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Market_FindNearTokenPrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TokenPriceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServer).FindNearTokenPrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Market_FindNearTokenPrice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServer).FindNearTokenPrice(ctx, req.(*TokenPriceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Market_FindNearBaseTokenPrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BaseTokenPriceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServer).FindNearBaseTokenPrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Market_FindNearBaseTokenPrice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServer).FindNearBaseTokenPrice(ctx, req.(*BaseTokenPriceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Market_FindTokenInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TokenInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServer).FindTokenInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Market_FindTokenInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServer).FindTokenInfo(ctx, req.(*TokenInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Market_ServiceDesc is the grpc.ServiceDesc for Market service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +254,18 @@ var Market_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FindMaxSupplyPairInfoByTokenAddrAndChainID",
 			Handler:    _Market_FindMaxSupplyPairInfoByTokenAddrAndChainID_Handler,
+		},
+		{
+			MethodName: "FindNearTokenPrice",
+			Handler:    _Market_FindNearTokenPrice_Handler,
+		},
+		{
+			MethodName: "FindNearBaseTokenPrice",
+			Handler:    _Market_FindNearBaseTokenPrice_Handler,
+		},
+		{
+			MethodName: "FindTokenInfo",
+			Handler:    _Market_FindTokenInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

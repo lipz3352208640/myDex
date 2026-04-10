@@ -32,3 +32,18 @@ func (s *MarketServer) FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Co
 	l := logic.NewFindMaxSupplyPairInfoByTokenAddrAndChainIDLogic(ctx, s.svcCtx)
 	return l.FindMaxSupplyPairInfoByTokenAddrAndChainID(in)
 }
+
+func (s *MarketServer) FindNearTokenPrice(ctx context.Context, in *market.TokenPriceRequest) (*market.TokenPriceResponse, error) {
+	l := logic.NewFindNearTokenPriceLogic(ctx, s.svcCtx)
+	return l.FindNearTokenPrice(in)
+}
+
+func (s *MarketServer) FindNearBaseTokenPrice(ctx context.Context, in *market.BaseTokenPriceRequest) (*market.BaseTokenPriceResponse, error) {
+	l := logic.NewFindNearBaseTokenPriceLogic(ctx, s.svcCtx)
+	return l.FindNearBaseTokenPrice(in)
+}
+
+func (s *MarketServer) FindTokenInfo(ctx context.Context, in *market.TokenInfoRequest) (*market.TokenInfoResponse, error) {
+	l := logic.NewFindTokenInfoLogic(ctx, s.svcCtx)
+	return l.FindTokenInfo(in)
+}

@@ -389,6 +389,342 @@ func (x *PairInfo) GetLatestTradeTime() int64 {
 	return 0
 }
 
+type BaseTokenPriceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	BaseTokenAddr string                 `protobuf:"bytes,2,opt,name=base_token_addr,json=baseTokenAddr,proto3" json:"base_token_addr,omitempty"`
+	QueryTime     string                 `protobuf:"bytes,3,opt,name=query_time,json=queryTime,proto3" json:"query_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BaseTokenPriceRequest) Reset() {
+	*x = BaseTokenPriceRequest{}
+	mi := &file_market_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BaseTokenPriceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BaseTokenPriceRequest) ProtoMessage() {}
+
+func (x *BaseTokenPriceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BaseTokenPriceRequest.ProtoReflect.Descriptor instead.
+func (*BaseTokenPriceRequest) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BaseTokenPriceRequest) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *BaseTokenPriceRequest) GetBaseTokenAddr() string {
+	if x != nil {
+		return x.BaseTokenAddr
+	}
+	return ""
+}
+
+func (x *BaseTokenPriceRequest) GetQueryTime() string {
+	if x != nil {
+		return x.QueryTime
+	}
+	return ""
+}
+
+type BaseTokenPriceResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	BaseTokenPrice float64                `protobuf:"fixed64,1,opt,name=base_token_price,json=baseTokenPrice,proto3" json:"base_token_price,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BaseTokenPriceResponse) Reset() {
+	*x = BaseTokenPriceResponse{}
+	mi := &file_market_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BaseTokenPriceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BaseTokenPriceResponse) ProtoMessage() {}
+
+func (x *BaseTokenPriceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BaseTokenPriceResponse.ProtoReflect.Descriptor instead.
+func (*BaseTokenPriceResponse) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BaseTokenPriceResponse) GetBaseTokenPrice() float64 {
+	if x != nil {
+		return x.BaseTokenPrice
+	}
+	return 0
+}
+
+type TokenPriceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	TokenAddr     string                 `protobuf:"bytes,2,opt,name=token_addr,json=tokenAddr,proto3" json:"token_addr,omitempty"`
+	BaseTokenAddr string                 `protobuf:"bytes,3,opt,name=base_token_addr,json=baseTokenAddr,proto3" json:"base_token_addr,omitempty"`
+	QueryTime     string                 `protobuf:"bytes,4,opt,name=query_time,json=queryTime,proto3" json:"query_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TokenPriceRequest) Reset() {
+	*x = TokenPriceRequest{}
+	mi := &file_market_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TokenPriceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TokenPriceRequest) ProtoMessage() {}
+
+func (x *TokenPriceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TokenPriceRequest.ProtoReflect.Descriptor instead.
+func (*TokenPriceRequest) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *TokenPriceRequest) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *TokenPriceRequest) GetTokenAddr() string {
+	if x != nil {
+		return x.TokenAddr
+	}
+	return ""
+}
+
+func (x *TokenPriceRequest) GetBaseTokenAddr() string {
+	if x != nil {
+		return x.BaseTokenAddr
+	}
+	return ""
+}
+
+func (x *TokenPriceRequest) GetQueryTime() string {
+	if x != nil {
+		return x.QueryTime
+	}
+	return ""
+}
+
+type TokenPriceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenPrice    float64                `protobuf:"fixed64,1,opt,name=token_price,json=tokenPrice,proto3" json:"token_price,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TokenPriceResponse) Reset() {
+	*x = TokenPriceResponse{}
+	mi := &file_market_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TokenPriceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TokenPriceResponse) ProtoMessage() {}
+
+func (x *TokenPriceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TokenPriceResponse.ProtoReflect.Descriptor instead.
+func (*TokenPriceResponse) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TokenPriceResponse) GetTokenPrice() float64 {
+	if x != nil {
+		return x.TokenPrice
+	}
+	return 0
+}
+
+type TokenInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"` // Chain ID
+	TokenAddr     string                 `protobuf:"bytes,2,opt,name=token_addr,json=tokenAddr,proto3" json:"token_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TokenInfoRequest) Reset() {
+	*x = TokenInfoRequest{}
+	mi := &file_market_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TokenInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TokenInfoRequest) ProtoMessage() {}
+
+func (x *TokenInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TokenInfoRequest.ProtoReflect.Descriptor instead.
+func (*TokenInfoRequest) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TokenInfoRequest) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *TokenInfoRequest) GetTokenAddr() string {
+	if x != nil {
+		return x.TokenAddr
+	}
+	return ""
+}
+
+type TokenInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"` // Chain ID
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`                 // Token contract address
+	Program       string                 `protobuf:"bytes,3,opt,name=program,proto3" json:"program,omitempty"`                 // program
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`                       // token name
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TokenInfoResponse) Reset() {
+	*x = TokenInfoResponse{}
+	mi := &file_market_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TokenInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TokenInfoResponse) ProtoMessage() {}
+
+func (x *TokenInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TokenInfoResponse.ProtoReflect.Descriptor instead.
+func (*TokenInfoResponse) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TokenInfoResponse) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *TokenInfoResponse) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *TokenInfoResponse) GetProgram() string {
+	if x != nil {
+		return x.Program
+	}
+	return ""
+}
+
+func (x *TokenInfoResponse) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_market_proto protoreflect.FileDescriptor
 
 const file_market_proto_rawDesc = "" +
@@ -428,10 +764,39 @@ const file_market_proto_rawDesc = "" +
 	"\n" +
 	"block_time\x18\x16 \x01(\x03R\tblockTime\x12.\n" +
 	"\x13highest_token_price\x18\x17 \x01(\x01R\x11highestTokenPrice\x12*\n" +
-	"\x11latest_trade_time\x18\x18 \x01(\x03R\x0flatestTradeTime2\x8c\x01\n" +
+	"\x11latest_trade_time\x18\x18 \x01(\x03R\x0flatestTradeTime\"y\n" +
+	"\x15BaseTokenPriceRequest\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12&\n" +
+	"\x0fbase_token_addr\x18\x02 \x01(\tR\rbaseTokenAddr\x12\x1d\n" +
+	"\n" +
+	"query_time\x18\x03 \x01(\tR\tqueryTime\"B\n" +
+	"\x16BaseTokenPriceResponse\x12(\n" +
+	"\x10base_token_price\x18\x01 \x01(\x01R\x0ebaseTokenPrice\"\x94\x01\n" +
+	"\x11TokenPriceRequest\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x1d\n" +
+	"\n" +
+	"token_addr\x18\x02 \x01(\tR\ttokenAddr\x12&\n" +
+	"\x0fbase_token_addr\x18\x03 \x01(\tR\rbaseTokenAddr\x12\x1d\n" +
+	"\n" +
+	"query_time\x18\x04 \x01(\tR\tqueryTime\"5\n" +
+	"\x12TokenPriceResponse\x12\x1f\n" +
+	"\vtoken_price\x18\x01 \x01(\x01R\n" +
+	"tokenPrice\"L\n" +
+	"\x10TokenInfoRequest\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x1d\n" +
+	"\n" +
+	"token_addr\x18\x02 \x01(\tR\ttokenAddr\"v\n" +
+	"\x11TokenInfoResponse\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x18\n" +
+	"\aprogram\x18\x03 \x01(\tR\aprogram\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name2\xf8\x02\n" +
 	"\x06Market\x12)\n" +
 	"\x04Ping\x12\x0f.market.Request\x1a\x10.market.Response\x12W\n" +
-	"*FindMaxSupplyPairInfoByTokenAddrAndChainID\x12\x17.market.PairInfoRequest\x1a\x10.market.PairInfoB\n" +
+	"*FindMaxSupplyPairInfoByTokenAddrAndChainID\x12\x17.market.PairInfoRequest\x1a\x10.market.PairInfo\x12K\n" +
+	"\x12FindNearTokenPrice\x12\x19.market.TokenPriceRequest\x1a\x1a.market.TokenPriceResponse\x12W\n" +
+	"\x16FindNearBaseTokenPrice\x12\x1d.market.BaseTokenPriceRequest\x1a\x1e.market.BaseTokenPriceResponse\x12D\n" +
+	"\rFindTokenInfo\x12\x18.market.TokenInfoRequest\x1a\x19.market.TokenInfoResponseB\n" +
 	"Z\b./marketb\x06proto3"
 
 var (
@@ -446,20 +811,32 @@ func file_market_proto_rawDescGZIP() []byte {
 	return file_market_proto_rawDescData
 }
 
-var file_market_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_market_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_market_proto_goTypes = []any{
-	(*Request)(nil),         // 0: market.Request
-	(*Response)(nil),        // 1: market.Response
-	(*PairInfoRequest)(nil), // 2: market.PairInfoRequest
-	(*PairInfo)(nil),        // 3: market.PairInfo
+	(*Request)(nil),                // 0: market.Request
+	(*Response)(nil),               // 1: market.Response
+	(*PairInfoRequest)(nil),        // 2: market.PairInfoRequest
+	(*PairInfo)(nil),               // 3: market.PairInfo
+	(*BaseTokenPriceRequest)(nil),  // 4: market.BaseTokenPriceRequest
+	(*BaseTokenPriceResponse)(nil), // 5: market.BaseTokenPriceResponse
+	(*TokenPriceRequest)(nil),      // 6: market.TokenPriceRequest
+	(*TokenPriceResponse)(nil),     // 7: market.TokenPriceResponse
+	(*TokenInfoRequest)(nil),       // 8: market.TokenInfoRequest
+	(*TokenInfoResponse)(nil),      // 9: market.TokenInfoResponse
 }
 var file_market_proto_depIdxs = []int32{
 	0, // 0: market.Market.Ping:input_type -> market.Request
 	2, // 1: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:input_type -> market.PairInfoRequest
-	1, // 2: market.Market.Ping:output_type -> market.Response
-	3, // 3: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:output_type -> market.PairInfo
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
+	6, // 2: market.Market.FindNearTokenPrice:input_type -> market.TokenPriceRequest
+	4, // 3: market.Market.FindNearBaseTokenPrice:input_type -> market.BaseTokenPriceRequest
+	8, // 4: market.Market.FindTokenInfo:input_type -> market.TokenInfoRequest
+	1, // 5: market.Market.Ping:output_type -> market.Response
+	3, // 6: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:output_type -> market.PairInfo
+	7, // 7: market.Market.FindNearTokenPrice:output_type -> market.TokenPriceResponse
+	5, // 8: market.Market.FindNearBaseTokenPrice:output_type -> market.BaseTokenPriceResponse
+	9, // 9: market.Market.FindTokenInfo:output_type -> market.TokenInfoResponse
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -476,7 +853,7 @@ func file_market_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_market_proto_rawDesc), len(file_market_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

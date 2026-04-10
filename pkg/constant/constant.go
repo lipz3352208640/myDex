@@ -40,3 +40,19 @@ const (
 	SolChainId    = "100000"
 	SolChainIdInt = 100000
 )
+
+type GasType int32
+
+const (
+	GasType_GasTypeSpeedInvalid GasType = 0
+	GasType_NormalSpeed         GasType = 1
+	GasType_FastSpeed           GasType = 2
+	GasType_SuperFastSpeed      GasType = 3
+)
+
+var GasMODE = map[GasType]uint64{
+	0:                      5_000,    // use for test
+	GasType_NormalSpeed:    150000,   //0.00015 sol
+	GasType_FastSpeed:      4500000,  //0.0045 sol
+	GasType_SuperFastSpeed: 15000000, //0.015 sol
+}

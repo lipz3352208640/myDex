@@ -1,6 +1,8 @@
 package solmodel
 
 import (
+	"context"
+
 	. "github.com/klen-ygs/gorm-zero/gormc/sql"
 	"gorm.io/gorm"
 )
@@ -19,12 +21,24 @@ type (
 
 	customTokenLogicModel interface {
 		WithSession(tx *gorm.DB) TokenModel
+		FindTokenInfoByTokenAddrAndChainID(ctx context.Context, chainId int64, tokenAddr string) (*Token, error)
 	}
 
 	customTokenModel struct {
 		*defaultTokenModel
 	}
 )
+
+func (c customTokenModel) FindTokenInfoByTokenAddrAndChainID(ctx context.Context, chainId int64, tokenAddr string) (*Token, error) {
+	var resp Token
+	err := c.conn.WithContext(ctx).Model(&Token{}).Where("`chain_id` = ? and `address` = ? ", chainId, tokenAddr).First(&resp).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
 
 func (c customTokenModel) WithSession(tx *gorm.DB) TokenModel {
 	newModel := *c.defaultTokenModel

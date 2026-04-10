@@ -43,9 +43,46 @@ message PairInfo {
   int64 latest_trade_time = 24;  // Latest on-chain trade timestamp
 }
 
+message BaseTokenPriceRequest {
+  int64 chain_id = 1;
+  string base_token_addr = 2;
+  string query_time = 3;
+}
+
+message BaseTokenPriceResponse {
+  double base_token_price = 1;
+}
+
+message TokenPriceRequest {
+  int64 chain_id = 1;
+  string token_addr = 2;
+  string base_token_addr = 3;
+  string query_time = 4;
+}
+
+message TokenPriceResponse {
+  double token_price = 1;
+}
+
+
+message TokenInfoRequest {
+  int64 chain_id = 1;  // Chain ID
+  string token_addr = 2;
+}
+
+message TokenInfoResponse {
+  int64 chain_id = 1;  // Chain ID
+  string address = 2;  // Token contract address
+  string program = 3;  // program
+  string name = 4;  // token name
+}
+
 
 
 service Market {
   rpc Ping(Request) returns(Response);
   rpc FindMaxSupplyPairInfoByTokenAddrAndChainID(PairInfoRequest) returns(PairInfo);
+  rpc FindNearTokenPrice(TokenPriceRequest) returns(TokenPriceResponse);
+  rpc FindNearBaseTokenPrice(BaseTokenPriceRequest) returns(BaseTokenPriceResponse);
+  rpc FindTokenInfo(TokenInfoRequest) returns(TokenInfoResponse);
 }

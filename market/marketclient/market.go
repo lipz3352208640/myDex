@@ -14,14 +14,23 @@ import (
 )
 
 type (
-	PairInfo        = market.PairInfo
-	PairInfoRequest = market.PairInfoRequest
-	Request         = market.Request
-	Response        = market.Response
+	BaseTokenPriceRequest  = market.BaseTokenPriceRequest
+	BaseTokenPriceResponse = market.BaseTokenPriceResponse
+	PairInfo               = market.PairInfo
+	PairInfoRequest        = market.PairInfoRequest
+	Request                = market.Request
+	Response               = market.Response
+	TokenInfoRequest       = market.TokenInfoRequest
+	TokenInfoResponse      = market.TokenInfoResponse
+	TokenPriceRequest      = market.TokenPriceRequest
+	TokenPriceResponse     = market.TokenPriceResponse
 
 	Market interface {
 		Ping(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 		FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Context, in *PairInfoRequest, opts ...grpc.CallOption) (*PairInfo, error)
+		FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error)
+		FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error)
+		FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error)
 	}
 
 	defaultMarket struct {
@@ -43,4 +52,19 @@ func (m *defaultMarket) Ping(ctx context.Context, in *Request, opts ...grpc.Call
 func (m *defaultMarket) FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Context, in *PairInfoRequest, opts ...grpc.CallOption) (*PairInfo, error) {
 	client := market.NewMarketClient(m.cli.Conn())
 	return client.FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx, in, opts...)
+}
+
+func (m *defaultMarket) FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error) {
+	client := market.NewMarketClient(m.cli.Conn())
+	return client.FindNearTokenPrice(ctx, in, opts...)
+}
+
+func (m *defaultMarket) FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error) {
+	client := market.NewMarketClient(m.cli.Conn())
+	return client.FindNearBaseTokenPrice(ctx, in, opts...)
+}
+
+func (m *defaultMarket) FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error) {
+	client := market.NewMarketClient(m.cli.Conn())
+	return client.FindTokenInfo(ctx, in, opts...)
 }

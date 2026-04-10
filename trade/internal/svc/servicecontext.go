@@ -5,6 +5,7 @@ import (
 	"log"
 	"myDex/market/market"
 	"myDex/model/solmodel"
+	"myDex/trade/internal/chain/solana"
 	"myDex/trade/internal/config"
 	"os"
 	"time"
@@ -21,6 +22,7 @@ type ServiceContext struct {
 	Marketclient    market.MarketClient
 	DB              *gorm.DB
 	TradeOrderModel solmodel.TradeOrderModel
+	TxMananger      *solana.TxManager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -61,5 +63,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Marketclient:    marketClient,
 		DB:              db,
 		TradeOrderModel: solmodel.NewTradeOrderModel(db),
+		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[0]),
 	}
 }
