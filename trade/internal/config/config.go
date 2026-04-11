@@ -7,6 +7,7 @@ type Config struct {
 	MarketService zrpc.RpcClientConf `json:"market_service"`
 	Mysql         MysqlConfig        `json:"mysql"`
 	Helius        Entity             `json:"Helius,optional"`
+	SimulateOnly  bool               `json:"simulate_only"`
 }
 
 type MysqlConfig struct {

@@ -22,6 +22,7 @@ type (
 	customTradeOrderLogicModel interface {
 		WithSession(tx *gorm.DB) TradeOrderModel
 		InsertWithLog(ctx context.Context, data *TradeOrder) error
+		UpdateOrder(ctx context.Context, order *TradeOrder, updateField []string) error
 	}
 
 	customTradeOrderModel struct {
@@ -32,6 +33,16 @@ type (
 func (c customTradeOrderModel) InsertWithLog(ctx context.Context, data *TradeOrder) error {
 	return c.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Save(&data).Error
+		if err != nil {
+			return err
+		}
+		return NewTradeOrderLogModel(tx).InsertWithOrder(ctx, data)
+	})
+}
+
+func (c customTradeOrderModel) UpdateOrder(ctx context.Context, data *TradeOrder, updateField []string) error {
+	return c.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		err := tx.Model(&data).Where("id = ?", data.Id).Select(updateField).Updates(&data).Error
 		if err != nil {
 			return err
 		}

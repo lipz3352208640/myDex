@@ -5,6 +5,7 @@ ListenOn: 0.0.0.0:8080
 #   - 127.0.0.1:2379
 #   Key: trade.rpc
 
+simulate_only: true
 
 Helius:
   NodeUrl:
@@ -14,5 +15,5 @@ Helius:
 market_service:
   target: localhost:8080
   nonblock: true
-  timeout: 100000  # 3 seconds timeout
+  timeout: 100000 # 3 seconds timeout
   transport: tcp

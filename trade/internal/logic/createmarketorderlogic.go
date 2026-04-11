@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"myDex/market/market"
 	"myDex/model/solmodel"
 	"myDex/pkg/constant"
 	"myDex/pkg/xcode"
+	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/internal/enum"
-	"myDex/trade/internal/logic/entity"
 	"myDex/trade/internal/svc"
 	"myDex/trade/trade"
+	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -175,7 +175,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		return nil, xcode.ServerErr
 	}
 
-	txhash, err := CreateMarketTx(tradeOrder, pairInfo, in)
+	txhash, err := l.CreateMarketTx(tradeOrder, pairInfo, in)
 	if err != nil {
 		l.Errorf("acquire tx hash err:%s", err.Error())
 		return nil, xcode.ServerErr
@@ -185,6 +185,8 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		l.Errorf("acquire tx hash is 0, err:%s", err.Error())
 		return nil, xcode.ServerErr
 	}
+
+	fmt.Printf("CreateMarketOrderLogic CreateMarketTx success, txhash: %s", txhash)
 
 	return &trade.MarketOrderResponse{
 		TxHash: txhash,
@@ -201,6 +203,7 @@ func BoolToInt64(b bool) int64 {
 // 创建市单交易
 func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pairInfo *market.PairInfo, in *trade.MarketOrderRequest) (string, error) {
 	var err error
+	var txHash string
 	defer func() {
 		// 如果订单状态是触发中 并且有错误，那么将订单状态改为失败
 		if order.Status == int64(enum.OrderStatus_Proc) && err != nil {
@@ -221,11 +224,13 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 	outTokenAddree := pairInfo.TokenAddress
 	outTokenDecimal := pairInfo.TokenDecimal
 	inBaseTokenDecimal := pairInfo.BaseTokenDecimal
+
+	//buy：下单的wsol兑换wspl min0 -> wsol min1 -> swpl
+	//sell: 下单wspl兑换swol min0 -> swpl  min1 -> wsol
 	if in.SwapType == trade.SwapType_Sell {
-		inBaseTokenAddree = pairInfo.TokenAddress
-		outTokenAddree = pairInfo.BaseTokenAddress
-		inBaseTokenDecimal = pairInfo.TokenDecimal
-		outTokenDecimal = pairInfo.BaseTokenDecimal
+		inProgrmID, outProgramID = outProgramID, inProgrmID
+		inBaseTokenAddree, outTokenAddree = outTokenAddree, inBaseTokenAddree
+		inBaseTokenDecimal, outTokenDecimal = outTokenDecimal, inBaseTokenDecimal
 	}
 
 	param := &entity.MarketTx{
@@ -264,16 +269,37 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 		txHash, err = l.createAndSendTx(param)
 		if err != nil {
 			err = convertSwapErr(pairInfo.Name, err)
+		} else {
+			return txHash, err
 		}
 	}
-
+	err = l.updateDbByTxResult(order, param, txHash, err)
+	if err != nil {
+		return "", fmt.Errorf("updateDbByTxResult err is %v", err)
+	}
+	return txHash, nil
 }
 
-func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) {
+func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (string, error) {
 	chainId := marketTx.ChainId
 	if chainId == constant.SolChainIdInt {
-		l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
+		txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
+		if err != nil {
+			return "", fmt.Errorf("Failed to build unsigned transaction: %w", err)
+		}
+		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(l.ctx, txToString)
+		if err != nil {
+			l.Errorf("Failed to sign transaction: %v", err)
+			return "", fmt.Errorf("Failed to sign transaction: %w", err)
+		}
+		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(l.ctx, signedTx)
+		if err != nil {
+			l.Errorf("Failed to send transaction: %v", err)
+			return "", fmt.Errorf("Failed to send transaction: %w", err)
+		}
+		return txHash, nil
 	}
+	return "", fmt.Errorf("unsupported chain id: %d", chainId)
 }
 
 func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, swapType trade.SwapType) (string, string, error) {
@@ -281,10 +307,7 @@ func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, sw
 	//获取in和out token的合于地址，用于创建ata账户指令
 	inTokenAddree := pairInfo.BaseTokenAddress
 	outTokenAddree := pairInfo.TokenAddress
-	if swapType == trade.SwapType_Sell {
-		inTokenAddree = pairInfo.TokenAddress
-		outTokenAddree = pairInfo.BaseTokenAddress
-	}
+
 	outTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(l.ctx, &market.TokenInfoRequest{
 		ChainId:   pairInfo.ChainId,
 		TokenAddr: outTokenAddree,
@@ -309,8 +332,47 @@ func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, sw
 	return inTokenInfo.Program, outTokenInfo.Program, nil
 }
 
-func (l *CreateMarketOrderLogic) updateDbByTxResult() {
+func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
+	param *entity.MarketTx,
+	txHash string,
+	err error) error {
 
+	if order == nil {
+		return fmt.Errorf("order is nil")
+	}
+	//避免上游ctx取消，导致订单状态无法更新
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var updateField []string
+	if nil != order && nil != param && order.Slippage != int64(param.Slippage) {
+		order.Slippage = int64(param.Slippage)
+		updateField = append(updateField, "slippage")
+	}
+	if err != nil {
+		updateField = append(updateField, "status", "fail_reason")
+		if len(txHash) > 0 {
+			updateField = append(updateField, "tx_hash")
+		}
+		order.Status = int64(enum.OrderStatus_Fail)
+		order.FailReason = err.Error()
+
+		err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, updateField)
+		if err != nil {
+			return fmt.Errorf("update order err is %w", err)
+		}
+	} else {
+
+		order.Status = int64(enum.OrderStatus_OnChain)
+		order.TxHash = txHash
+		updateField = append(updateField, "status", "tx_hash")
+
+		err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, updateField)
+		if err != nil {
+			return fmt.Errorf("update order err is %w", err)
+		}
+	}
+
+	return nil
 }
 
 func convertSwapErr(poolName string, err error) error {

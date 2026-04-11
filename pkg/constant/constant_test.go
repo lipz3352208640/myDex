@@ -21,7 +21,8 @@ func TestByteToHex(t *testing.T) {
 	b0 := binary.LittleEndian.Uint64(bytes)
 	fmt.Printf("hexString is %x\n", b0)
 
-	b1 := []byte{189, 219, 127, 211, 78, 230, 97, 238}
+	b1 := []byte{103, 108, 111, 98, 97, 108, 95, 118, 111, 108, 117, 109, 101,
+                  95, 97, 99, 99, 117, 109, 117, 108, 97, 116, 111, 114}
 	s := base64.StdEncoding.EncodeToString(b1)
 
 	fmt.Printf("hexString is %s\n", s)

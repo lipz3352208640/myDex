@@ -63,6 +63,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Marketclient:    marketClient,
 		DB:              db,
 		TradeOrderModel: solmodel.NewTradeOrderModel(db),
-		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[0]),
+		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[0], c.SimulateOnly),
 	}
 }

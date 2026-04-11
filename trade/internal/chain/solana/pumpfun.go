@@ -2,17 +2,17 @@ package solana
 
 import (
 	"context"
+	"fmt"
 	"myDex/pkg/constant"
 	"myDex/pkg/xcode"
-	"myDex/trade/internal/logic/entity"
+
+	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/trade"
 
 	aSDK "github.com/gagliardetto/solana-go"
 	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/shopspring/decimal"
-	ata "github.com/gagliardetto/solana-go/programs/associated-token-account"
-	"greet/pkg/sol/associatedtoken2022account"
 )
 
 var Decimals2Value = map[uint8]int64{
@@ -37,11 +37,18 @@ var Decimals2Value = map[uint8]int64{
 	18: 1e18,
 }
 
+var (
+	AllBpDecimal = decimal.NewFromInt(10000)
+	//fee 分母
+	FeeRateDenominatorValue = decimal.NewFromInt(1000000)
+	RaydiumV4Fee            = uint64(2500)
+	PumpFee                 = uint64(10000)
+	PumpSwapFee             = uint64(2500)
+)
 
 type PumpFunInstruction interface {
 	CreateMarketOrderPumpfun(ctx context.Context, marketTx entity.MarketTxExt) ([]aSDK.Instruction, error)
 	CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error)
-	CreateAtaIdempotent(payer,walletAddress,token)
 }
 
 func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error) {
@@ -80,8 +87,9 @@ func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, wall
 }
 
 // 创建pumpfun swap相关指令
-func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx entity.MarketTxExt) ([]aSDK.Instruction, error) {
+func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *entity.MarketTxExt) ([]aSDK.Instruction, error) {
 
+	var instructions []aSDK.Instruction
 	//设置
 	lamportCost := tx.rentFee
 
@@ -96,11 +104,12 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx enti
 	//链上的金额用lamport表示，是整型
 	amountUint64 := uint64(amountDecimal.IntPart())
 	//step 1: 创建Compute Budget指令，设置计算单元价格以及计算单元数量限制
-	instructions, lamportCostFee, err := tx.CreateGasByGasFee(ctx, marketTx.IsAntiMev, marketTx.UserWalletAddress, constant.PumpFunSwapCU, constant.GasMODE[1])
+	budgetInstructions, lamportCostFee, err := tx.CreateGasByGasFee(ctx, marketTx.IsAntiMev, marketTx.UserWalletAddress, constant.PumpFunSwapCU, constant.GasMODE[1])
 	lamportCost += lamportCostFee
 	if nil != err {
 		return nil, err
 	}
+	instructions = append(instructions, budgetInstructions...)
 
 	//判断支付的费用和钱包余额对比
 	out, err := tx.Client.GetBalance(ctx, wallet, rpc.CommitmentFinalized)
@@ -121,7 +130,56 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx enti
 		return nil, xcode.SolBalanceNotEnough
 	}
 
-	//step 2: Associated Token Program: CreateIdempotent。创建mint 对应的ata账户
-	ata.
+	//step 2: Associated Token Program: CreateIdempotent。创建mint 对应的ata账户，判断mint是否是sol
+	var swapDirection int
+	if marketTx.InMint == aSDK.WrappedSol || marketTx.OutMint == aSDK.WrappedSol {
+		swapDirection = int(trade.SwapType_Buy)
+		tokenMint := marketTx.OutMint
+		tokenProgram := marketTx.OutTokenProgram
+		if swapDirection == int(trade.SwapType_Sell) {
+			tokenMint = marketTx.InMint
+			tokenProgram = marketTx.InTokenProgram
+		}
+		ataOneInst, err := tx.CreateAtaIdempotent(wallet, wallet, tokenMint, tokenProgram)
+		if err != nil {
+			tx.Errorf("create inMint ATA account err : %v", err)
+			return nil, err
+		}
+		instructions = append(instructions, ataOneInst)
+	} else {
+		ataOneInst, err := tx.CreateAtaIdempotent(wallet, wallet, marketTx.InMint, marketTx.InTokenProgram)
+		if err != nil {
+			tx.Errorf("create inMint ATA account err : %v", err)
+			return nil, err
+		}
+		ataTwoInst, err := tx.CreateAtaIdempotent(wallet, wallet, marketTx.OutMint, marketTx.OutTokenProgram)
+		if err != nil {
+			tx.Errorf("create outMint ATA account err : %v", err)
+			return nil, err
+		}
+		instructions = append(instructions, ataOneInst, ataTwoInst)
+	}
+
+	//构建buy和sell指令
+	if marketTx.SwapType == int32(trade.SwapType_Buy) {
+		tx.Debugf("Creating pumpfun buy instruction, amount: %s, amountUint64: %d", marketTx.AmountIn, amountUint64)
+		buyInstruction, err := tx.CreateBuyInstruction(marketTx)
+		if err != nil {
+			tx.Errorf("create pumpfun buy instruction err : %v", err)
+			return nil, err
+		}
+		instructions = append(instructions, buyInstruction)
+	} else if marketTx.SwapType == int32(trade.SwapType_Sell) {
+		tx.Debugf("Creating pumpfun sell instruction, amount: %s, amountUint64: %d", marketTx.AmountIn, amountUint64)
+		sellInstruction, err := tx.CreateSellInstruction(marketTx)
+		if err != nil {
+			tx.Errorf("create pumpfun sell instruction err : %v", err)
+			return nil, err
+		}
+		instructions = append(instructions, sellInstruction)
+	} else {
+		return nil, fmt.Errorf("invalid swap type: %d", marketTx.SwapType)
+	}
+	return instructions, nil
 
 }

@@ -2,6 +2,7 @@ package solana
 
 import (
 	"fmt"
+	associatedtoken2022account "myDex/pkg/token2022"
 
 	bin "github.com/gagliardetto/binary"
 	aSDK "github.com/gagliardetto/solana-go"
@@ -38,15 +39,13 @@ func (tm *TxManager) CreateTokenAtaIdempotent(payer, walletAddress, mint aSDK.Pu
 }
 
 func (tm *TxManager) CreateToken2022AtaIdempotent(payer, walletAddress, mint aSDK.PublicKey) (aSDK.Instruction, error) {
-	instruction := ata.NewCreateInstruction(payer, walletAddress, mint)
-	instruction.AccountMetaSlice[5] = aSDK.Meta(aSDK.Token2022ProgramID)
-
-	builtInstruction, err := instruction.ValidateAndBuild()
+	instruction, err := associatedtoken2022account.NewCreateInstruction(payer, walletAddress, mint).ValidateAndBuild()
 	if err != nil {
 		return nil, err
 	}
 
-	builtInstruction.TypeID = bin.TypeIDFromUint8(ata.Instruction_CreateIdempotent)
+	instruction.TypeID = bin.TypeIDFromUint8(ata.Instruction_CreateIdempotent)
 
-	return builtInstruction, nil
+	return instruction, nil
 }
+

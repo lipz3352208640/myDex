@@ -11,7 +11,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/klen-ygs/gorm-zero v1.3.3
 	github.com/samber/lo v1.53.0
-	github.com/shopspring/decimal v1.3.1
+	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.6.2
 	google.golang.org/grpc v1.80.0
