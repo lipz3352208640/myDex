@@ -319,7 +319,7 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 		}
 	}
 	//step 4 获取creator vault 相关账户
-	creatorVault, err := pumpfun.CreateCreatorVault(tx.MainClient, bondingCurve.BondingCurve)
+	creatorVault, err := pumpfun.CreateCreatorVault(tx.Client, bondingCurve.BondingCurve)
 	if err != nil {
 		tx.Errorf("create creator vault err: %v", err)
 		return nil, err

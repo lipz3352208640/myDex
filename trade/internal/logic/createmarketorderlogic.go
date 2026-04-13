@@ -122,20 +122,20 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 
 	}
 
-	if decimal.NewFromFloat(pairInfo.TokenPrice).IsZero() {
-		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearTokenPrice(ctx, &market.TokenPriceRequest{
-			ChainId:       int64(in.ChainId),
-			TokenAddr:     pairInfo.TokenAddress,
-			BaseTokenAddr: pairInfo.BaseTokenAddress,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if baseTokenPriceResp.TokenPrice == 0 {
-			return nil, xcode.PoolLiquidityNotEnough
-		}
-		tokenPrice = baseTokenPriceResp.TokenPrice
-	}
+	// if decimal.NewFromFloat(pairInfo.TokenPrice).IsZero() {
+	// 	baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearTokenPrice(ctx, &market.TokenPriceRequest{
+	// 		ChainId:       int64(in.ChainId),
+	// 		TokenAddr:     pairInfo.TokenAddress,
+	// 		BaseTokenAddr: pairInfo.BaseTokenAddress,
+	// 	})
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	if baseTokenPriceResp.TokenPrice == 0 {
+	// 		return nil, xcode.PoolLiquidityNotEnough
+	// 	}
+	// 	tokenPrice = baseTokenPriceResp.TokenPrice
+	// }
 
 	solPriceDecimal := decimal.NewFromFloat(baseTokenPrice)
 	tokenPriceDecimal := decimal.NewFromFloat(tokenPrice)
