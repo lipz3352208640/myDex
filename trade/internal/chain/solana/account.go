@@ -39,6 +39,7 @@ func (tm *TxManager) CreateTokenAtaIdempotent(payer, walletAddress, mint aSDK.Pu
 }
 
 func (tm *TxManager) CreateToken2022AtaIdempotent(payer, walletAddress, mint aSDK.PublicKey) (aSDK.Instruction, error) {
+	tm.Infof("Creating Token2022 ATA: payer=%s, walletAddress=%s, mint=%s", payer.String(), walletAddress.String(), mint.String())
 	instruction, err := associatedtoken2022account.NewCreateInstruction(payer, walletAddress, mint).ValidateAndBuild()
 	if err != nil {
 		return nil, err

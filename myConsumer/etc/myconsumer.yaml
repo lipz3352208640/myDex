@@ -1,5 +1,5 @@
 Name: myconsumer.rpc
-ListenOn: 0.0.0.0:8080
+ListenOn: 0.0.0.0:8083
 # Etcd:
 #   Hosts:
 #   - 127.0.0.1:2379
@@ -20,6 +20,6 @@ Thread:
 Mysql:
   User: root
   Password: "123456"
-  Host: 47.239.81.141
+  Host: 47.239.136.246
   Port: 3306
   Dbname: fun_dex

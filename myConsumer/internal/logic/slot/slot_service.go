@@ -150,7 +150,7 @@ func (s *SlotService) ConnectWs() {
 						break
 					}
 
-					//s.Infof("helius subscribe ack is %s\n", string(message))
+					s.Infof("helius subscribe ack is %s\n", string(message))
 
 					var errResp entity.WsErrResp
 					if err := json.Unmarshal(message, &errResp); err == nil && errResp.Error.Message != "" {

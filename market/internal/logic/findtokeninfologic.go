@@ -27,8 +27,9 @@ func NewFindTokenInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Fin
 func (l *FindTokenInfoLogic) FindTokenInfo(in *market.TokenInfoRequest) (*market.TokenInfoResponse, error) {
 	// todo: add your logic here and delete this line
 
+	ctx := context.Background()
 	var tokenInfo *solmodel.Token
-	tokenInfo, err := l.svcCtx.TokenInfoModel.FindTokenInfoByTokenAddrAndChainID(l.ctx, in.ChainId, in.TokenAddr)
+	tokenInfo, err := l.svcCtx.TokenInfoModel.FindTokenInfoByTokenAddrAndChainID(ctx, in.ChainId, in.TokenAddr)
 	if err != nil {
 		return nil, err
 	}

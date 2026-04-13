@@ -27,8 +27,9 @@ func NewFindMaxSupplyPairInfoByTokenAddrAndChainIDLogic(ctx context.Context, svc
 func (l *FindMaxSupplyPairInfoByTokenAddrAndChainIDLogic) FindMaxSupplyPairInfoByTokenAddrAndChainID(in *market.PairInfoRequest) (*market.PairInfo, error) {
 	// todo: add your logic here and delete this line
 
+	ctx := context.Background()
 	var pairInfo *solmodel.Pair
-	pairInfo, err := l.svcCtx.PairInfoModel.FindMaxSupplyPairInfoByTokenAddrAndChainID(l.ctx, in.ChainId, in.TokenAddr)
+	pairInfo, err := l.svcCtx.PairInfoModel.FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx, in.ChainId, in.TokenAddr)
 	if err != nil {
 		return nil, err
 	}

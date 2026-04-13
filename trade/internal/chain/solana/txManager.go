@@ -60,6 +60,7 @@ type CreateMarketTx struct {
 
 type TxManager struct {
 	Client       *ag_rpc.Client
+	MainClient   *ag_rpc.Client
 	DB           *gorm.DB
 	rentFee      uint64
 	context      context.Context
@@ -67,11 +68,12 @@ type TxManager struct {
 	logx.Logger
 }
 
-func NewTxManager(db *gorm.DB, rpcEndpoint string, simulateOnly bool) *TxManager {
+func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool) *TxManager {
 
 	tm := &TxManager{
 		DB:           db,
 		Client:       ag_rpc.New(rpcEndpoint),
+		MainClient:   ag_rpc.New(mainRpcEndpoint),
 		SimulateOnly: simulateOnly,
 		Logger:       logx.WithContext(context.Background()).WithFields(logx.LogField{Key: "service", Value: "txManage"}),
 	}
@@ -137,7 +139,7 @@ func convertMarketTx(in *entity.MarketTx) (*entity.MarketTxExt, error) {
 
 // 模拟执行交易。检查交易是否成功，不会发送上链
 func (tm *TxManager) simulate(ctx context.Context, tx *aSDK.Transaction) error {
-	simOut, err := tm.Client.SimulateTransactionWithOpts(ctx, tx, &ag_rpc.SimulateTransactionOpts{
+	simOut, err := tm.MainClient.SimulateTransactionWithOpts(ctx, tx, &ag_rpc.SimulateTransactionOpts{
 		Commitment: ag_rpc.CommitmentProcessed,
 	})
 	if err != nil {
@@ -181,7 +183,7 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 
 	// 设置rpc调用最多15s超时时间
 	//step 2: get latest blockhash
-	timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(context.TODO(), 15*time.Second)
 	defer cancel()
 
 	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
@@ -266,9 +268,10 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 	}
 
 	// Return the signature of the first signer as a string
-
 	if tm.SimulateOnly {
-		err = tm.simulate(ctx, &unsignedTx)
+		timeoutCtx, cancel := context.WithTimeout(context.TODO(), 15*time.Second)
+		defer cancel()
+		err = tm.simulate(timeoutCtx, &unsignedTx)
 		if err != nil {
 			return aSDK.Transaction{}, "", err
 		}
@@ -280,7 +283,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aSDK.Transaction) (string, error) {
 
 	sig, err := tm.Client.SendTransactionWithOpts(ctx, &transcation, ag_rpc.TransactionOpts{
-		Encoding:            aSDK.EncodingBase58,
+		SkipPreflight:       false,
 		PreflightCommitment: ag_rpc.CommitmentConfirmed,
 	})
 	if err != nil {

@@ -58,11 +58,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	//设置连接最大可存活时间，避免长连接不释放
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
+	fmt.Println("rpc endpoint:", c.Helius.NodeUrl[0])
+
 	return &ServiceContext{
 		Config:          c,
 		Marketclient:    marketClient,
 		DB:              db,
 		TradeOrderModel: solmodel.NewTradeOrderModel(db),
-		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[0], c.SimulateOnly),
+		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly),
 	}
 }

@@ -2,11 +2,13 @@ package pumpfun
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 	"myDex/pkg/constant"
+	token2022 "myDex/pkg/token2022"
+	"time"
 
+	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -41,8 +43,12 @@ type CreatorVaultResult struct {
 
 type BondingCurveData struct {
 	RealTokenReserves    *big.Int
+	RealSolReserves      *big.Int
 	VirtualTokenReserves *big.Int
 	VirtualSolReserves   *big.Int
+	TokenTotalSupply     *big.Int
+	Complete             bool
+	Creator              solana.PublicKey
 }
 
 type PumpFun struct {
@@ -50,38 +56,107 @@ type PumpFun struct {
 	rpcClient *rpc.Client
 }
 
+type globalAccountMinimal struct {
+	Initialized  bool
+	Authority    solana.PublicKey
+	FeeRecipient solana.PublicKey
+}
+
+var globalAccountDiscriminator = [8]byte{167, 232, 232, 177, 200, 108, 114, 127}
+
+func (obj *globalAccountMinimal) UnmarshalWithDecoder(decoder *bin.Decoder) (err error) {
+	discriminator, err := decoder.ReadTypeID()
+	if err != nil {
+		return err
+	}
+	if !discriminator.Equal(globalAccountDiscriminator[:]) {
+		return fmt.Errorf("wrong discriminator: wanted %v, got %v", globalAccountDiscriminator, discriminator)
+	}
+	if err = decoder.Decode(&obj.Initialized); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.Authority); err != nil {
+		return err
+	}
+	return decoder.Decode(&obj.FeeRecipient)
+}
+
+type bondingCurveAccount struct {
+	VirtualTokenReserves uint64
+	VirtualSolReserves   uint64
+	RealTokenReserves    uint64
+	RealSolReserves      uint64
+	TokenTotalSupply     uint64
+	Complete             bool
+	Creator              solana.PublicKey
+}
+
+var bondingCurveAccountDiscriminator = [8]byte{23, 183, 248, 55, 96, 216, 172, 96}
+
+func (obj *bondingCurveAccount) UnmarshalWithDecoder(decoder *bin.Decoder) (err error) {
+	discriminator, err := decoder.ReadTypeID()
+	if err != nil {
+		return err
+	}
+	if !discriminator.Equal(bondingCurveAccountDiscriminator[:]) {
+		return fmt.Errorf("wrong discriminator: wanted %v, got %v", bondingCurveAccountDiscriminator, discriminator)
+	}
+	if err = decoder.Decode(&obj.VirtualTokenReserves); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.VirtualSolReserves); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.RealTokenReserves); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.RealSolReserves); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.TokenTotalSupply); err != nil {
+		return err
+	}
+	if err = decoder.Decode(&obj.Complete); err != nil {
+		return err
+	}
+	return decoder.Decode(&obj.Creator)
+}
+
 func FetchBondingCurve(rpcClient *rpc.Client, bondingCurvePubKey solana.PublicKey) (*BondingCurveData, error) {
 
-	ctx, cancel := context.WithCancel(context.Background())
+	fmt.Println("bondingCurvePDA:", bondingCurvePubKey.String())
+	ctx, cancel := context.WithTimeout(context.Background(), 5000000*time.Second)
 	defer cancel()
 	resp, err := rpcClient.GetAccountInfoWithOpts(ctx, bondingCurvePubKey,
 		&rpc.GetAccountInfoOpts{Encoding: solana.EncodingBase64,
-			Commitment: rpc.CommitmentProcessed})
+			Commitment: rpc.CommitmentConfirmed})
 	if err != nil {
 		return nil, fmt.Errorf("FBCD: failed to get account info: %w", err)
 	}
 
 	data := resp.Value.Data.GetBinary()
-	if len(data) < 32 {
-		return nil, fmt.Errorf("FBCD: insufficient data length")
+	decoder := bin.NewBorshDecoder(data)
+	var account bondingCurveAccount
+	if err := account.UnmarshalWithDecoder(decoder); err != nil {
+		return nil, fmt.Errorf("FBCD: decode bonding curve failed: %w", err)
 	}
 
-	discriminator := data[0:8]
-	virtualTokenReserves := data[8:16]
-	virtualSolReserves := data[16:24]
-	RealTokenReserves := data[24:32]
-
-	logx.Infof("Fetched bonding curve data: {discriminator: %v, virtualTokenReserves: %v, virtualSolReserves: %v, realTokenReserves: %v}", discriminator, virtualTokenReserves, virtualSolReserves, RealTokenReserves)
+	logx.Infof("Fetched bonding curve data: {virtualTokenReserves: %d, virtualSolReserves: %d, realTokenReserves: %d, realSolReserves: %d, complete: %v}",
+		account.VirtualTokenReserves, account.VirtualSolReserves, account.RealTokenReserves, account.RealSolReserves, account.Complete)
 
 	return &BondingCurveData{
-		RealTokenReserves:    new(big.Int).SetUint64(binary.LittleEndian.Uint64(RealTokenReserves)),
-		VirtualTokenReserves: new(big.Int).SetUint64(binary.LittleEndian.Uint64(virtualTokenReserves)),
-		VirtualSolReserves:   new(big.Int).SetUint64(binary.LittleEndian.Uint64(virtualSolReserves)),
+		RealTokenReserves:    new(big.Int).SetUint64(account.RealTokenReserves),
+		RealSolReserves:      new(big.Int).SetUint64(account.RealSolReserves),
+		VirtualTokenReserves: new(big.Int).SetUint64(account.VirtualTokenReserves),
+		VirtualSolReserves:   new(big.Int).SetUint64(account.VirtualSolReserves),
+		TokenTotalSupply:     new(big.Int).SetUint64(account.TokenTotalSupply),
+		Complete:             account.Complete,
+		Creator:              solana.PublicKey(account.Creator),
 	}, nil
 }
 
 // GetBondingCurveAndAssociatedBondingCurve returns the bonding curve and associated bonding curve, in a structured format.
-func GetBondingCurveAndAssociatedBondingCurve(mint solana.PublicKey) (*BondingCurvePublicKeys, error) {
+func GetBondingCurveAndAssociatedBondingCurve(mint solana.PublicKey, tokenProgram solana.PublicKey) (*BondingCurvePublicKeys, error) {
 	// Derive bonding curve address.
 	// define the seeds used to derive the PDA
 	// getProgramDerivedAddress equivalent.
@@ -94,12 +169,22 @@ func GetBondingCurveAndAssociatedBondingCurve(mint solana.PublicKey) (*BondingCu
 		return nil, fmt.Errorf("failed to derive bonding curve address: %w", err)
 	}
 	// Derive associated bonding curve address.
-	associatedBondingCurve, _, err := solana.FindAssociatedTokenAddress(
-		bondingCurve,
-		mint,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to derive associated bonding curve address: %w", err)
+
+	var associatedBondingCurve solana.PublicKey
+	var err1 error
+	switch tokenProgram {
+	case solana.TokenProgramID:
+		associatedBondingCurve, _, err1 = solana.FindAssociatedTokenAddress(bondingCurve, mint)
+
+	case solana.Token2022ProgramID:
+		associatedBondingCurve, _, err1 = token2022.FindAssociatedToken2022Address(bondingCurve, mint)
+	}
+	// associatedBondingCurve, _, err := solana.FindAssociatedTokenAddress(
+	// 	bondingCurve,
+	// 	mint,
+	// )
+	if err1 != nil {
+		return nil, fmt.Errorf("failed to derive associated bonding curve address: %w", err1)
 	}
 	return &BondingCurvePublicKeys{
 		BondingCurve:           bondingCurve,
@@ -122,27 +207,24 @@ func CreateCreatorVault(rpcClient *rpc.Client, bondingCurve solana.PublicKey) (*
 	defer cancel()
 	resp, err := rpcClient.GetAccountInfoWithOpts(ctx, bondingCurve,
 		&rpc.GetAccountInfoOpts{Encoding: solana.EncodingBase64,
-			Commitment: rpc.CommitmentProcessed})
+			Commitment: rpc.CommitmentConfirmed})
 	if err != nil {
 		return nil, fmt.Errorf("FBCD: failed to get account info: %w", err)
 	}
 
 	data := resp.Value.Data.GetBinary()
-	if len(data) < 32 {
-		return nil, fmt.Errorf("FBCD: insufficient data length")
-	}
-
-	if len(data) < 81 {
-		return nil, fmt.Errorf("FBCD: insufficient data length for creator vault")
+	decoder := bin.NewBorshDecoder(data)
+	var account bondingCurveAccount
+	if err := account.UnmarshalWithDecoder(decoder); err != nil {
+		return nil, fmt.Errorf("FBCD: decode bonding curve for creator vault failed: %w", err)
 	}
 
 	//获取create vault地址
-	creator := data[49:81]
-	creatorPubKey := solana.PublicKeyFromBytes(creator)
+	creatorPubKey := solana.PublicKey(account.Creator)
 
 	seeds := [][]byte{
 		[]byte("creator-vault"),
-		creator,
+		creatorPubKey.Bytes(),
 	}
 
 	pda, _, err := solana.FindProgramAddress(seeds, solana.MustPublicKeyFromBase58(constant.PumpAddress))
@@ -174,14 +256,13 @@ func GetGlobalFeeRecipient(rpcClient *rpc.Client) (solana.PublicKey, error) {
 		return solana.PublicKey{}, fmt.Errorf("global account not found")
 	}
 	data := acct.Value.Data.GetBinary()
-	if len(data) < 73 {
-		return solana.PublicKey{}, fmt.Errorf("invalid global account data length")
+	decoder := bin.NewBorshDecoder(data)
+	var globalAccount globalAccountMinimal
+	if err := globalAccount.UnmarshalWithDecoder(decoder); err != nil {
+		return solana.PublicKey{}, fmt.Errorf("decode global account: %w", err)
 	}
 
-	feeRecipient := data[41:73]
-	feeRecipientPubKey := solana.PublicKeyFromBytes(feeRecipient)
-
-	return solana.MustPublicKeyFromBase58(feeRecipientPubKey.String()), nil
+	return globalAccount.FeeRecipient, nil
 }
 
 func FindGlobalVolumeAccumulatorAddress() (pda solana.PublicKey, err error) {
@@ -193,8 +274,8 @@ func FindGlobalVolumeAccumulatorAddress() (pda solana.PublicKey, err error) {
 	return pda, nil
 }
 
-func FindUserVolumeAccumulatorAddress() (pda solana.PublicKey, err error) {
-	pda, _, err = solana.FindProgramAddress([][]byte{[]byte("user_volume_accumulator")}, solana.MustPublicKeyFromBase58(constant.PumpAddress))
+func FindUserVolumeAccumulatorAddress(user solana.PublicKey) (pda solana.PublicKey, err error) {
+	pda, _, err = solana.FindProgramAddress([][]byte{[]byte("user_volume_accumulator"), user.Bytes()}, solana.MustPublicKeyFromBase58(constant.PumpAddress))
 	if err != nil {
 		return solana.PublicKey{}, fmt.Errorf("derive user_volume_accumulator PDA: %w", err)
 	}

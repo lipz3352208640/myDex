@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"myDex/pkg/constant"
+	pumpfun "myDex/pkg/pump"
 	"myDex/pkg/xcode"
+	"time"
 
 	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/trade"
@@ -42,8 +44,9 @@ var (
 	//fee 分母
 	FeeRateDenominatorValue = decimal.NewFromInt(1000000)
 	RaydiumV4Fee            = uint64(2500)
-	PumpFee                 = uint64(10000)
-	PumpSwapFee             = uint64(2500)
+	//PumpFee                 = uint64(50000)
+	PumpFee     = uint64(10000)
+	PumpSwapFee = uint64(2500)
 )
 
 type PumpFunInstruction interface {
@@ -112,7 +115,14 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *ent
 	instructions = append(instructions, budgetInstructions...)
 
 	//判断支付的费用和钱包余额对比
-	out, err := tx.Client.GetBalance(ctx, wallet, rpc.CommitmentFinalized)
+	debugCtx, cancel := context.WithTimeout(context.Background(), 5000000*time.Second)
+	defer cancel()
+	out, err := tx.Client.GetBalance(debugCtx, wallet, rpc.CommitmentConfirmed)
+
+	if err != nil {
+		return nil, fmt.Errorf("GetBalance failed, wallet=%s, err=%w", wallet.String(), err)
+	}
+
 	balance := out.Value
 
 	//buy时：直接拿sol买，服务费现收  sell时；服务费是从卖出token（wspl）得到的sol中获取
@@ -163,6 +173,22 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *ent
 	//构建buy和sell指令
 	if marketTx.SwapType == int32(trade.SwapType_Buy) {
 		tx.Debugf("Creating pumpfun buy instruction, amount: %s, amountUint64: %d", marketTx.AmountIn, amountUint64)
+		userVolumeAccumulator, err := pumpfun.FindUserVolumeAccumulatorAddress(marketTx.UserWalletAddress)
+		if err != nil {
+			tx.Errorf("find user volume accumulator address err : %v", err)
+			return nil, err
+		}
+
+		needInitUserVolumeAccumulator, err := tx.shouldInitUserVolumeAccumulator(userVolumeAccumulator)
+		if err != nil {
+			tx.Errorf("check user volume accumulator err : %v", err)
+			return nil, err
+		}
+		if needInitUserVolumeAccumulator {
+			tx.Infof("user volume accumulator not found, initializing: %s", userVolumeAccumulator.String())
+			instructions = append(instructions, tx.BuildInitUserVolumeAccumulatorInstruction(marketTx.UserWalletAddress, userVolumeAccumulator))
+		}
+
 		buyInstruction, err := tx.CreateBuyInstruction(marketTx)
 		if err != nil {
 			tx.Errorf("create pumpfun buy instruction err : %v", err)

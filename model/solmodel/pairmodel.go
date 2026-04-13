@@ -24,9 +24,9 @@ type (
 
 	customPairLogicModel interface {
 		WithSession(tx *gorm.DB) PairModel
-		FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Context, chainId int64, tokenAddr string) (*Pair, error)
 		FindNearTokenPriceByChainIdAndTokenAddr(ctx context.Context, chainId int64, tokenAddr string, baseTokenAddr string, searchTime time.Time) (*Pair, error)
 		FindNearBaseTokenPriceByChainIdAndTokenAddr(ctx context.Context, chainId int64, baseTokenAddr string, searchTime time.Time) (*Pair, error)
+		FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx context.Context, chainId int64, tokenAddr string) (*Pair, error)
 	}
 
 	customPairModel struct {

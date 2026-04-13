@@ -36,6 +36,7 @@ func (c customTradeOrderModel) InsertWithLog(ctx context.Context, data *TradeOrd
 		if err != nil {
 			return err
 		}
+		ctx = context.Background()
 		return NewTradeOrderLogModel(tx).InsertWithOrder(ctx, data)
 	})
 }

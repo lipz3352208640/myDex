@@ -1,5 +1,5 @@
 Name: trade.rpc
-ListenOn: 0.0.0.0:8080
+ListenOn: 0.0.0.0:8081
 # Etcd:
 #   Hosts:
 #   - 127.0.0.1:2379
@@ -9,7 +9,10 @@ simulate_only: true
 
 Helius:
   NodeUrl:
-    - "https://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
+    - "https://api.devnet.solana.com"
+    - "https://api.devnet.solana.com"
+    # - "https://api.mainnet-beta.solana.com"
+    # - "https://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
   WSUrl: "wss://mainnet.helius-rpc.com/?api-key=c1b7651b-92c6-4188-ab02-3849f0ee3816"
 
 market_service:
@@ -17,3 +20,10 @@ market_service:
   nonblock: true
   timeout: 100000 # 3 seconds timeout
   transport: tcp
+
+Mysql:
+  User: root
+  Password: "123456"
+  Host: 47.239.136.246
+  Port: 3306
+  Dbname: fun_dex

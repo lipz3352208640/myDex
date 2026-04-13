@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gagliardetto/solana-go/programs/token"
 	"github.com/shopspring/decimal"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -89,8 +90,11 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		return nil, xcode.AmountErr
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	//根据trade pair，获取token,sol 价格，以及token,sol池子数量，用于计算最小数量等
-	pairInfo, err := l.svcCtx.Marketclient.FindMaxSupplyPairInfoByTokenAddrAndChainID(l.ctx, &market.PairInfoRequest{
+	pairInfo, err := l.svcCtx.Marketclient.FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx, &market.PairInfoRequest{
 		ChainId:   int64(in.ChainId),
 		TokenAddr: in.TokenCa,
 	})
@@ -98,11 +102,12 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		l.Errorf("get pairInfo err is %v", err.Error())
 		return nil, xcode.ServerErr
 	}
+	l.Infof("getpairInfo: %v", pairInfo)
 	//如果当前流动池中的base token价格缺失，获取该base token的最近成交价
 	baseTokenPrice := pairInfo.BaseTokenPrice
 	tokenPrice := pairInfo.BaseTokenPrice
 	if decimal.NewFromFloat(pairInfo.BaseTokenPrice).IsZero() {
-		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearBaseTokenPrice(l.ctx, &market.BaseTokenPriceRequest{
+		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearBaseTokenPrice(ctx, &market.BaseTokenPriceRequest{
 			ChainId:       int64(in.ChainId),
 			BaseTokenAddr: pairInfo.BaseTokenAddress,
 		})
@@ -118,7 +123,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 	}
 
 	if decimal.NewFromFloat(pairInfo.TokenPrice).IsZero() {
-		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearTokenPrice(l.ctx, &market.TokenPriceRequest{
+		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearTokenPrice(ctx, &market.TokenPriceRequest{
 			ChainId:       int64(in.ChainId),
 			TokenAddr:     pairInfo.TokenAddress,
 			BaseTokenAddr: pairInfo.BaseTokenAddress,
@@ -157,7 +162,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		Status:         int64(enum.OrderStatus_Proc),
 		OrderCap:       decimal.NewFromFloat(pairInfo.Fdv),
 		OrderAmount:    amountInDecimal,
-		OrderPriceBase: tokenPriceDecimal,
+		OrderPriceBase: orderPriceBase,
 		OrderValueBase: orderValueBase,
 		OrderBasePrice: decimal.NewFromFloat(pairInfo.BaseTokenPrice),
 		// 是否翻倍出本 1:是 0:否
@@ -166,15 +171,15 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		PairCa:        pairInfo.Address,
 		WalletAddress: in.UserWalletAddress,
 	}
-
-	err = l.svcCtx.TradeOrderModel.InsertWithLog(l.ctx, tradeOrder)
+	ctx, cancel = context.WithTimeout(context.Background(), 15000*time.Second)
+	defer cancel()
+	err = l.svcCtx.TradeOrderModel.InsertWithLog(ctx, tradeOrder)
 
 	if err != nil {
 		l.Errorf("InsertWithLog err:%s", err.Error())
 
 		return nil, xcode.ServerErr
 	}
-
 	txhash, err := l.CreateMarketTx(tradeOrder, pairInfo, in)
 	if err != nil {
 		l.Errorf("acquire tx hash err:%s", err.Error())
@@ -182,7 +187,11 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 	}
 
 	if len(txhash) == 0 {
-		l.Errorf("acquire tx hash is 0, err:%s", err.Error())
+		if err != nil {
+			l.Errorf("acquire tx hash is 0, err:%s", err.Error())
+		} else {
+			l.Errorf("acquire tx hash is 0, err is nil")
+		}
 		return nil, xcode.ServerErr
 	}
 
@@ -234,15 +243,16 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 	}
 
 	param := &entity.MarketTx{
+		ChainId:           uint64(in.ChainId),
 		UserId:            uint64(order.Uid),
 		UserWalletId:      uint32(order.WalletIndex),
 		UserWalletAddress: in.UserWalletAddress,
-		InTokenProgram:    inProgrmID,
-		OutTokenProgram:   outProgramID,
+		InTokenProgram:    constant.TokenProgramID,
+		OutTokenProgram:   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
 		InDecimal:         uint8(inBaseTokenDecimal),
 		OutDecimal:        uint8(outTokenDecimal),
-		InTokenCa:         inBaseTokenAddree,
-		OutTokenCa:        outTokenAddree,
+		InTokenCa:         constant.Wsol,
+		OutTokenCa:        "E9UaDtniBeTDgZD4pQDecXvXQarWEyC9d6D7LTmxXwuN",
 		IsAntiMev:         order.IsAntiMev == 1,
 		IsAutoSlippage:    order.IsAutoSlippage == 1,
 		Slippage:          uint32(order.Slippage),
@@ -284,7 +294,9 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 	chainId := marketTx.ChainId
 	if chainId == constant.SolChainIdInt {
 		txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
+
 		if err != nil {
+
 			return "", fmt.Errorf("Failed to build unsigned transaction: %w", err)
 		}
 		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(l.ctx, txToString)
@@ -292,7 +304,9 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 			l.Errorf("Failed to sign transaction: %v", err)
 			return "", fmt.Errorf("Failed to sign transaction: %w", err)
 		}
-		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(l.ctx, signedTx)
+		timeoutCtx, cancel := context.WithTimeout(context.TODO(), 150000*time.Second)
+		defer cancel()
+		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
 		if err != nil {
 			l.Errorf("Failed to send transaction: %v", err)
 			return "", fmt.Errorf("Failed to send transaction: %w", err)
@@ -304,11 +318,11 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 
 func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, swapType trade.SwapType) (string, string, error) {
 
-	//获取in和out token的合于地址，用于创建ata账户指令
-	inTokenAddree := pairInfo.BaseTokenAddress
+	//获取out token的合于地址，用于创建ata账户指令
 	outTokenAddree := pairInfo.TokenAddress
-
-	outTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(l.ctx, &market.TokenInfoRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 1000000000*time.Second)
+	defer cancel()
+	outTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(ctx, &market.TokenInfoRequest{
 		ChainId:   pairInfo.ChainId,
 		TokenAddr: outTokenAddree,
 	})
@@ -319,17 +333,7 @@ func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, sw
 		return "", "", fmt.Errorf("get token program is empty")
 	}
 
-	inTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(l.ctx, &market.TokenInfoRequest{
-		ChainId:   pairInfo.ChainId,
-		TokenAddr: inTokenAddree,
-	})
-	if err != nil {
-		return "", "", err
-	}
-	if len(inTokenInfo.Program) == 0 {
-		return "", "", fmt.Errorf("get token program is empty")
-	}
-	return inTokenInfo.Program, outTokenInfo.Program, nil
+	return token.ProgramID.String(), outTokenInfo.Program, nil
 }
 
 func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,

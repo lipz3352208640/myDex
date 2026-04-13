@@ -40,11 +40,20 @@ func (tx *TxManager) CheckRentFee() {
 
 func (tx *TxManager) UpdateRentFee() (uint64, error) {
 	//创建带超时的上下文，防止卡死。每次请求单独创建一个，互不影响
-	context, cancle := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancle()
-	lamport, err := tx.Client.GetMinimumBalanceForRentExemption(context, accountSize, rpc.CommitmentFinalized)
-	if err != nil {
-		return 0, err
+	const retries = 3
+	const timeout = 10 * time.Second
+	var lastErr error
+
+	for attempt := 0; attempt < retries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		lamport, err := tx.Client.GetMinimumBalanceForRentExemption(ctx, accountSize, rpc.CommitmentProcessed)
+		cancel()
+		if err == nil {
+			return lamport, nil
+		}
+		lastErr = err
+		time.Sleep(500 * time.Millisecond)
 	}
-	return lamport, nil
+
+	return 0, lastErr
 }
