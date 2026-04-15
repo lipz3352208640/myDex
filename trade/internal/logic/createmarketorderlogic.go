@@ -105,7 +105,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 	l.Infof("getpairInfo: %v", pairInfo)
 	//如果当前流动池中的base token价格缺失，获取该base token的最近成交价
 	baseTokenPrice := pairInfo.BaseTokenPrice
-	tokenPrice := pairInfo.BaseTokenPrice
+	tokenPrice := pairInfo.TokenPrice
 	if decimal.NewFromFloat(pairInfo.BaseTokenPrice).IsZero() {
 		baseTokenPriceResp, err := l.svcCtx.Marketclient.FindNearBaseTokenPrice(ctx, &market.BaseTokenPriceRequest{
 			ChainId:       int64(in.ChainId),
@@ -141,6 +141,9 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 	tokenPriceDecimal := decimal.NewFromFloat(tokenPrice)
 	//挂单价格 1个token兑换几个sol
 	orderPriceBase := tokenPriceDecimal.Div(solPriceDecimal)
+	fmt.Println("solPriceDecimal:", solPriceDecimal.String())
+	fmt.Println("tokenPriceDecimal:", tokenPriceDecimal.String())
+	fmt.Println("orderPriceBase:", orderPriceBase.String())
 	//挂单数量(基于sol) sell: 卖出的token * orderPriceBase   buy：下单的数量
 	orderValueBase := amountInDecimal
 	if in.SwapType == trade.SwapType_Sell {
@@ -247,12 +250,12 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 		UserId:            uint64(order.Uid),
 		UserWalletId:      uint32(order.WalletIndex),
 		UserWalletAddress: in.UserWalletAddress,
-		InTokenProgram:    constant.TokenProgramID,
-		OutTokenProgram:   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+		InTokenProgram:    inProgrmID,
+		OutTokenProgram:   outProgramID,
 		InDecimal:         uint8(inBaseTokenDecimal),
 		OutDecimal:        uint8(outTokenDecimal),
-		InTokenCa:         constant.Wsol,
-		OutTokenCa:        "E9UaDtniBeTDgZD4pQDecXvXQarWEyC9d6D7LTmxXwuN",
+		InTokenCa:         inBaseTokenAddree,
+		OutTokenCa:        outTokenAddree,
 		IsAntiMev:         order.IsAntiMev == 1,
 		IsAutoSlippage:    order.IsAutoSlippage == 1,
 		Slippage:          uint32(order.Slippage),

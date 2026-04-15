@@ -9,6 +9,8 @@ import (
 	"myDex/myConsumer/internal/logic/enum"
 	"myDex/myConsumer/internal/svc"
 	"myDex/pkg/constant"
+	"myDex/trade/trade"
+	"myDex/trade/tradeclient"
 	"strconv"
 	"strings"
 	"time"
@@ -38,17 +40,33 @@ func (t *TradeServiceImpl) SaveTrades(trades []*entity.TradeWithPair) error {
 		if trade == nil {
 			return false
 		}
+
 		if trade.TxHash == "" {
 			return false
 		}
 		if trade.BaseTokenPriceUSD == 0 {
 			return false
 		}
-		if "" == trade.Type || (trade.Type != enum.TradeTypeBuy.String() && trade.Type != enum.TradeTypeBuy.String()) {
+		if "" == trade.Type || (trade.Type != enum.TradeTypeBuy.String() && trade.Type != enum.TradeTypeSell.String()) {
 			return false
 		}
 		return true
 	})
+
+	for i, tr := range trades {
+		if tr == nil {
+			fmt.Printf("[%d] trade=nil\n", i)
+			continue
+		}
+		fmt.Printf("[%d] txHash=%q price=%v type=%q buy=%q sell=%q\n",
+			i,
+			tr.TxHash,
+			tr.BaseTokenPriceUSD,
+			tr.Type,
+			enum.TradeTypeBuy.String(),
+			enum.TradeTypeSell.String(),
+		)
+	}
 
 	tradeMap := lo.GroupBy(validTrades, func(trade *entity.TradeWithPair) string {
 		return trade.PairAddr
@@ -56,23 +74,29 @@ func (t *TradeServiceImpl) SaveTrades(trades []*entity.TradeWithPair) error {
 
 	gp := threading.NewRoutineGroup()
 
+	fmt.Println("input trades len:", len(trades))
+	fmt.Println("validTrades len:", len(validTrades))
+	fmt.Println("tradeMap len:", len(tradeMap))
+
 	for key, trades := range tradeMap {
 
 		gp.RunSafe(func(pair string, trades []*entity.TradeWithPair) func() {
 			return func() {
+
 				txHashList := lo.Map(trades, func(trade *entity.TradeWithPair, _ int) string {
 					return trade.TxHash
 				})
 				t.Info("current trade transcation is %v", txHashList)
 				t.BatchSaveByTrade(trades)
+
 			}
 		}(key, trades))
 	}
+	gp.Wait()
 	return nil
 }
 
 func (t *TradeServiceImpl) BatchSaveByTrade(trades []*entity.TradeWithPair) {
-
 	select {
 	case <-t.ctx.Done():
 		return
@@ -100,11 +124,38 @@ func (t *TradeServiceImpl) BatchSaveByTrade(trades []*entity.TradeWithPair) {
 			t.Errorf("BatchSaveByTrade:SavePair err is %w", err)
 		}
 
+		t.sendTokenPrice2Trade(t.ctx, trade)
+
 	}
 	fmt.Println("save BatchSaveByTrade successful")
 
 }
 
+func (t *TradeServiceImpl) sendTokenPrice2Trade(ctx context.Context, tradeWithPair *entity.TradeWithPair) {
+
+	if tradeWithPair.Type != enum.TradeTypeBuy.String() && tradeWithPair.Type != enum.TradeTypeSell.String() {
+		t.Infof("sendTokenPrice2Trade tradeWithPair type in not buy or sell,tx hash: %v", tradeWithPair.TxHash)
+		return
+	}
+
+	if tradeWithPair.PairInfo.TokenAddr == "HmRbt3nXAKHzFL9agaDPrVFWtsCzKbKth4YPgHCYpump" {
+		fmt.Println("tradewithpair pairInfo tokenAddr is:", tradeWithPair.PairInfo.TokenAddr)
+	}
+
+	token2BasePrice := decimal.NewFromFloat(tradeWithPair.TokenPriceUSD).Div(decimal.NewFromFloat(tradeWithPair.BaseTokenPriceUSD)).String()
+
+	_, err := t.sc.TradeService.ProcTokenPrice(ctx, &tradeclient.ProcTokenPriceRequest{
+		TokenCa:  tradeWithPair.PairInfo.TokenAddr,
+		Price:    token2BasePrice,
+		SwapType: trade.SwapType_Buy,
+		ChainId:  constant.SolChainIdInt,
+	})
+	if err != nil {
+		logx.Errorf("sendTokenPrice2Trade failed: pair=%v, err=%v", tradeWithPair.PairAddr, err)
+		return
+	}
+	fmt.Println("successfully transfer token price info to trade service")
+}
 func (t *TradeServiceImpl) SavePair(ctx context.Context, trade *entity.TradeWithPair, tokenDb *solmodel.Token) (pairAtDB *solmodel.Pair, err error) {
 
 	//chainID 转换为int

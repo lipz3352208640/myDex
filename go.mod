@@ -10,8 +10,10 @@ require (
 	github.com/gagliardetto/treeout v0.1.4
 	github.com/gorilla/websocket v1.5.3
 	github.com/klen-ygs/gorm-zero v1.3.3
+	github.com/panjf2000/ants/v2 v2.12.0
 	github.com/samber/lo v1.53.0
 	github.com/shopspring/decimal v1.4.0
+	github.com/smarty/go-disruptor v0.5.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.6.2
 	google.golang.org/grpc v1.80.0
@@ -32,6 +34,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.3 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 )
 
 require (

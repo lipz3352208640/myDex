@@ -30,6 +30,31 @@ message MarketOrderRequest {
 }
 
 
+//用户下单后，传入到后端的限价单参数
+message LimitMarketOrderRequest {
+  //链id
+  int32 chain_id = 1;
+  //token 地址
+  string token_ca = 2;
+  //交易类型
+  SwapType swap_type = 3;
+  //输入数量
+  string amount_in = 4;
+  //是否翻倍出本
+  bool is_double_out = 5;
+  //钱包地址
+  string user_wallet_address = 6;
+  //token买入，卖出价格
+  string price_usd = 7;
+  //流动性市值买入卖出
+  string order_cap = 8;
+}
+
+message LimitMarketOrderResponse {
+  bool success = 1;
+}
+
+
 enum SwapType {
   SwapTypeAll = 0;
   Buy = 1;
@@ -40,7 +65,18 @@ message MarketOrderResponse {
   string tx_hash = 1;
 }
 
+message ProcTokenPriceRequest {
+  string token_ca = 1;
+  string price = 2;
+  SwapType swap_type = 3;
+  int64 chain_id = 4;
+}
+
+message ProcTokenPriceResponse {}
+
 service Trade {
   rpc Ping(Request) returns(Response);
   rpc CreateMarketOrder(MarketOrderRequest) returns(MarketOrderResponse);
+  rpc CreateLimitMarketOrder(LimitMarketOrderRequest) returns(LimitMarketOrderResponse);
+    rpc ProcTokenPrice(ProcTokenPriceRequest)returns(ProcTokenPriceResponse);
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/config"
+	"myDex/trade/trade"
+	"myDex/trade/tradeclient"
 	"net"
 	"net/http"
 	"os"
@@ -17,14 +19,16 @@ import (
 	"github.com/blocto/solana-go-sdk/client"
 	"github.com/blocto/solana-go-sdk/rpc"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type ServiceContext struct {
-	Config     config.Config
-	solClients []*client.Client
-	BlockModel solmodel.BlockModel
-	TokenModel solmodel.TokenModel
-	PairModel  solmodel.PairModel
+	Config       config.Config
+	solClients   []*client.Client
+	BlockModel   solmodel.BlockModel
+	TokenModel   solmodel.TokenModel
+	PairModel    solmodel.PairModel
+	TradeService tradeclient.Trade
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -39,6 +43,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				}).DialContext,
 			},
 		}))
+		fmt.Println("helius url :", node)
 		solClients = append(solClients, c)
 	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.Mysql.User, c.Mysql.Password, c.Mysql.Host, c.Mysql.Port, c.Mysql.Dbname)
@@ -71,11 +76,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	//设置连接最大可存活时间，避免长连接不释放
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
+	tradeClient := trade.NewTradeClient(zrpc.MustNewClient(c.TradeService).Conn())
+
 	return &ServiceContext{
-		Config:     c,
-		solClients: solClients,
-		BlockModel: solmodel.NewBlockModel(db),
-		TokenModel: solmodel.NewTokenModel(db),
-		PairModel:  solmodel.NewPairModel(db),
+		Config:       c,
+		solClients:   solClients,
+		BlockModel:   solmodel.NewBlockModel(db),
+		TokenModel:   solmodel.NewTokenModel(db),
+		PairModel:    solmodel.NewPairModel(db),
+		TradeService: tradeClient,
 	}
 }

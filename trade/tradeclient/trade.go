@@ -14,14 +14,20 @@ import (
 )
 
 type (
-	MarketOrderRequest  = trade.MarketOrderRequest
-	MarketOrderResponse = trade.MarketOrderResponse
-	Request             = trade.Request
-	Response            = trade.Response
+	LimitMarketOrderRequest  = trade.LimitMarketOrderRequest
+	LimitMarketOrderResponse = trade.LimitMarketOrderResponse
+	MarketOrderRequest       = trade.MarketOrderRequest
+	MarketOrderResponse      = trade.MarketOrderResponse
+	ProcTokenPriceRequest    = trade.ProcTokenPriceRequest
+	ProcTokenPriceResponse   = trade.ProcTokenPriceResponse
+	Request                  = trade.Request
+	Response                 = trade.Response
 
 	Trade interface {
 		Ping(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 		CreateMarketOrder(ctx context.Context, in *MarketOrderRequest, opts ...grpc.CallOption) (*MarketOrderResponse, error)
+		CreateLimitMarketOrder(ctx context.Context, in *LimitMarketOrderRequest, opts ...grpc.CallOption) (*LimitMarketOrderResponse, error)
+		ProcTokenPrice(ctx context.Context, in *ProcTokenPriceRequest, opts ...grpc.CallOption) (*ProcTokenPriceResponse, error)
 	}
 
 	defaultTrade struct {
@@ -43,4 +49,14 @@ func (m *defaultTrade) Ping(ctx context.Context, in *Request, opts ...grpc.CallO
 func (m *defaultTrade) CreateMarketOrder(ctx context.Context, in *MarketOrderRequest, opts ...grpc.CallOption) (*MarketOrderResponse, error) {
 	client := trade.NewTradeClient(m.cli.Conn())
 	return client.CreateMarketOrder(ctx, in, opts...)
+}
+
+func (m *defaultTrade) CreateLimitMarketOrder(ctx context.Context, in *LimitMarketOrderRequest, opts ...grpc.CallOption) (*LimitMarketOrderResponse, error) {
+	client := trade.NewTradeClient(m.cli.Conn())
+	return client.CreateLimitMarketOrder(ctx, in, opts...)
+}
+
+func (m *defaultTrade) ProcTokenPrice(ctx context.Context, in *ProcTokenPriceRequest, opts ...grpc.CallOption) (*ProcTokenPriceResponse, error) {
+	client := trade.NewTradeClient(m.cli.Conn())
+	return client.ProcTokenPrice(ctx, in, opts...)
 }

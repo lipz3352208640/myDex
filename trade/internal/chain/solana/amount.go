@@ -153,6 +153,7 @@ func (tx *TxManager) calcSpendableSolInByTokens(tokens uint64, feeConfig solana.
 	}
 
 	protocolFeeBps, creatorFeeBps, err := tx.fetchFlatFees(feeConfig)
+
 	if err != nil {
 		return 0, err
 	}
@@ -191,6 +192,11 @@ func (tx *TxManager) fitBuyTokenAmountByMaxSolWithFee(maxSolCost uint64, feeConf
 	}
 	if boddingcurve == nil {
 		return 0, 0, fmt.Errorf("bonding curve data is nil")
+	}
+
+	for _, probe := range []uint64{1, 10, 100, 1000, 10000} {
+		requiredSol, err := tx.calcSpendableSolInByTokens(probe, feeConfig, boddingcurve)
+		tx.Infof("probe tokens=%d requiredSol=%d err=%v", probe, requiredSol, err)
 	}
 
 	// upper bound: real token reserves or virtual-1

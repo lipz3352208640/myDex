@@ -8,6 +8,7 @@ type Config struct {
 	Thread ThreadEntity `json:"thread"`
 	Mysql  MysqlConfig  `json:"mysql"`
 	Sol    SolEntity    `json:"sol"`
+	TradeService zrpc.RpcClientConf `json:"trade_service"`
 }
 
 type Entity struct {

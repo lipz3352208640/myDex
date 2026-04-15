@@ -93,9 +93,11 @@ func (b *BlockService) Stop() {
 
 func (b *BlockService) handleTransacton(slot uint64, workID int) {
 
+	slot = 348707344
 	if slot == 0 {
 		return
 	}
+	fmt.Println(slot)
 
 	//判断该slot是否已入库
 	dbBlock, err := b.sc.BlockModel.FindOneBySlot(b.ctx, int64(slot))
@@ -180,6 +182,7 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		gp.RunSafe(func() {
 			b.tradeService.SaveTrades(trades)
 		})
+		gp.Wait()
 	}
 
 	//入库
@@ -211,8 +214,8 @@ func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDeco
 		}
 
 		if transcation.Meta == nil || transcation.Meta.Err != nil {
-			logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
-			continue 
+			//logx.Errorf("[work-%d] transaction has error, slot=%d err=%v", workID, tx.Slot, transcation.Meta.Err)
+			continue
 		}
 
 		instructions := transcation.Transaction.Message.Instructions

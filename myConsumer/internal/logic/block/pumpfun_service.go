@@ -175,7 +175,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 			ChainIdInt:                   constant.SolChainIdInt,
 			Slot:                         txDecode.Block.Slot,
 			PairAddr:                     curveAccountAddress,
-			TxHash:                       txDecode.Signature,
+			TxHash:                       signature,
 			Maker:                        walletAccountAddress,
 			Type:                         tradeType,
 			BaseTokenAmount:              realSolAccount,

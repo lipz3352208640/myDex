@@ -3,9 +3,11 @@ package enum
 type TradeType uint8
 
 const (
-	TradeType_Market   TradeType = iota + 1 //市价单
-	TradeType_Limit                         // 限价单
-	TradeType_OneClick                      // 一键买卖
+	TradeType_Market        TradeType = iota + 1 //市价单
+	TradeType_Limit                              // 限价单
+	TradeType_OneClick                           // 一键买卖
+	TradeType_TokenCapLimit                      // 按照市值限价单
+	TradeType_TrailingStop                       // 移动止损类型
 )
 
 type OrderStatus uint8

@@ -19,8 +19,9 @@ const (
 	TokenProgramID     = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 
 	//token mint
-	Wsol       = "So11111111111111111111111111111111111111112"
-	Usdc       = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	Wsol = "So11111111111111111111111111111111111111112"
+	//Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	Usdc       = "DTeMTQv7jdRMHmjQxnvhkEKsWyF8UCRg7wN46yzbCE7v"
 	SolDecimal = 9
 	//token 虚拟流动量和真实流动量的差值
 	TokenReservesDiff = 279900000000000

@@ -19,8 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Trade_Ping_FullMethodName              = "/trade.Trade/Ping"
-	Trade_CreateMarketOrder_FullMethodName = "/trade.Trade/CreateMarketOrder"
+	Trade_Ping_FullMethodName                   = "/trade.Trade/Ping"
+	Trade_CreateMarketOrder_FullMethodName      = "/trade.Trade/CreateMarketOrder"
+	Trade_CreateLimitMarketOrder_FullMethodName = "/trade.Trade/CreateLimitMarketOrder"
+	Trade_ProcTokenPrice_FullMethodName         = "/trade.Trade/ProcTokenPrice"
 )
 
 // TradeClient is the client API for Trade service.
@@ -29,6 +31,8 @@ const (
 type TradeClient interface {
 	Ping(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	CreateMarketOrder(ctx context.Context, in *MarketOrderRequest, opts ...grpc.CallOption) (*MarketOrderResponse, error)
+	CreateLimitMarketOrder(ctx context.Context, in *LimitMarketOrderRequest, opts ...grpc.CallOption) (*LimitMarketOrderResponse, error)
+	ProcTokenPrice(ctx context.Context, in *ProcTokenPriceRequest, opts ...grpc.CallOption) (*ProcTokenPriceResponse, error)
 }
 
 type tradeClient struct {
@@ -59,12 +63,34 @@ func (c *tradeClient) CreateMarketOrder(ctx context.Context, in *MarketOrderRequ
 	return out, nil
 }
 
+func (c *tradeClient) CreateLimitMarketOrder(ctx context.Context, in *LimitMarketOrderRequest, opts ...grpc.CallOption) (*LimitMarketOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LimitMarketOrderResponse)
+	err := c.cc.Invoke(ctx, Trade_CreateLimitMarketOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradeClient) ProcTokenPrice(ctx context.Context, in *ProcTokenPriceRequest, opts ...grpc.CallOption) (*ProcTokenPriceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProcTokenPriceResponse)
+	err := c.cc.Invoke(ctx, Trade_ProcTokenPrice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradeServer is the server API for Trade service.
 // All implementations must embed UnimplementedTradeServer
 // for forward compatibility.
 type TradeServer interface {
 	Ping(context.Context, *Request) (*Response, error)
 	CreateMarketOrder(context.Context, *MarketOrderRequest) (*MarketOrderResponse, error)
+	CreateLimitMarketOrder(context.Context, *LimitMarketOrderRequest) (*LimitMarketOrderResponse, error)
+	ProcTokenPrice(context.Context, *ProcTokenPriceRequest) (*ProcTokenPriceResponse, error)
 	mustEmbedUnimplementedTradeServer()
 }
 
@@ -80,6 +106,12 @@ func (UnimplementedTradeServer) Ping(context.Context, *Request) (*Response, erro
 }
 func (UnimplementedTradeServer) CreateMarketOrder(context.Context, *MarketOrderRequest) (*MarketOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateMarketOrder not implemented")
+}
+func (UnimplementedTradeServer) CreateLimitMarketOrder(context.Context, *LimitMarketOrderRequest) (*LimitMarketOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateLimitMarketOrder not implemented")
+}
+func (UnimplementedTradeServer) ProcTokenPrice(context.Context, *ProcTokenPriceRequest) (*ProcTokenPriceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProcTokenPrice not implemented")
 }
 func (UnimplementedTradeServer) mustEmbedUnimplementedTradeServer() {}
 func (UnimplementedTradeServer) testEmbeddedByValue()               {}
@@ -138,6 +170,42 @@ func _Trade_CreateMarketOrder_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Trade_CreateLimitMarketOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LimitMarketOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeServer).CreateLimitMarketOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Trade_CreateLimitMarketOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeServer).CreateLimitMarketOrder(ctx, req.(*LimitMarketOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Trade_ProcTokenPrice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProcTokenPriceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeServer).ProcTokenPrice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Trade_ProcTokenPrice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeServer).ProcTokenPrice(ctx, req.(*ProcTokenPriceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Trade_ServiceDesc is the grpc.ServiceDesc for Trade service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +220,14 @@ var Trade_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateMarketOrder",
 			Handler:    _Trade_CreateMarketOrder_Handler,
+		},
+		{
+			MethodName: "CreateLimitMarketOrder",
+			Handler:    _Trade_CreateLimitMarketOrder_Handler,
+		},
+		{
+			MethodName: "ProcTokenPrice",
+			Handler:    _Trade_ProcTokenPrice_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

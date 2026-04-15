@@ -32,3 +32,13 @@ func (s *TradeServer) CreateMarketOrder(ctx context.Context, in *trade.MarketOrd
 	l := logic.NewCreateMarketOrderLogic(ctx, s.svcCtx)
 	return l.CreateMarketOrder(in)
 }
+
+func (s *TradeServer) CreateLimitMarketOrder(ctx context.Context, in *trade.LimitMarketOrderRequest) (*trade.LimitMarketOrderResponse, error) {
+	l := logic.NewCreateLimitMarketOrderLogic(ctx, s.svcCtx)
+	return l.CreateLimitMarketOrder(in)
+}
+
+func (s *TradeServer) ProcTokenPrice(ctx context.Context, in *trade.ProcTokenPriceRequest) (*trade.ProcTokenPriceResponse, error) {
+	l := logic.NewProcTokenPriceLogic(ctx, s.svcCtx)
+	return l.ProcTokenPrice(in)
+}

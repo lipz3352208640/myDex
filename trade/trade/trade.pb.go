@@ -258,6 +258,159 @@ func (x *MarketOrderRequest) GetUserWalletAddress() string {
 	return ""
 }
 
+// 用户下单后，传入到后端的限价单参数
+type LimitMarketOrderRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 链id
+	ChainId int32 `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	// token 地址
+	TokenCa string `protobuf:"bytes,2,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
+	// 交易类型
+	SwapType SwapType `protobuf:"varint,3,opt,name=swap_type,json=swapType,proto3,enum=trade.SwapType" json:"swap_type,omitempty"`
+	// 输入数量
+	AmountIn string `protobuf:"bytes,4,opt,name=amount_in,json=amountIn,proto3" json:"amount_in,omitempty"`
+	// 是否翻倍出本
+	IsDoubleOut bool `protobuf:"varint,5,opt,name=is_double_out,json=isDoubleOut,proto3" json:"is_double_out,omitempty"`
+	// 钱包地址
+	UserWalletAddress string `protobuf:"bytes,6,opt,name=user_wallet_address,json=userWalletAddress,proto3" json:"user_wallet_address,omitempty"`
+	// token买入，卖出价格
+	PriceUsd string `protobuf:"bytes,7,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
+	// 流动性市值买入卖出
+	OrderCap      string `protobuf:"bytes,8,opt,name=order_cap,json=orderCap,proto3" json:"order_cap,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LimitMarketOrderRequest) Reset() {
+	*x = LimitMarketOrderRequest{}
+	mi := &file_trade_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LimitMarketOrderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LimitMarketOrderRequest) ProtoMessage() {}
+
+func (x *LimitMarketOrderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trade_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LimitMarketOrderRequest.ProtoReflect.Descriptor instead.
+func (*LimitMarketOrderRequest) Descriptor() ([]byte, []int) {
+	return file_trade_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LimitMarketOrderRequest) GetChainId() int32 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *LimitMarketOrderRequest) GetTokenCa() string {
+	if x != nil {
+		return x.TokenCa
+	}
+	return ""
+}
+
+func (x *LimitMarketOrderRequest) GetSwapType() SwapType {
+	if x != nil {
+		return x.SwapType
+	}
+	return SwapType_SwapTypeAll
+}
+
+func (x *LimitMarketOrderRequest) GetAmountIn() string {
+	if x != nil {
+		return x.AmountIn
+	}
+	return ""
+}
+
+func (x *LimitMarketOrderRequest) GetIsDoubleOut() bool {
+	if x != nil {
+		return x.IsDoubleOut
+	}
+	return false
+}
+
+func (x *LimitMarketOrderRequest) GetUserWalletAddress() string {
+	if x != nil {
+		return x.UserWalletAddress
+	}
+	return ""
+}
+
+func (x *LimitMarketOrderRequest) GetPriceUsd() string {
+	if x != nil {
+		return x.PriceUsd
+	}
+	return ""
+}
+
+func (x *LimitMarketOrderRequest) GetOrderCap() string {
+	if x != nil {
+		return x.OrderCap
+	}
+	return ""
+}
+
+type LimitMarketOrderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LimitMarketOrderResponse) Reset() {
+	*x = LimitMarketOrderResponse{}
+	mi := &file_trade_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LimitMarketOrderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LimitMarketOrderResponse) ProtoMessage() {}
+
+func (x *LimitMarketOrderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trade_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LimitMarketOrderResponse.ProtoReflect.Descriptor instead.
+func (*LimitMarketOrderResponse) Descriptor() ([]byte, []int) {
+	return file_trade_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *LimitMarketOrderResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type MarketOrderResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TxHash        string                 `protobuf:"bytes,1,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
@@ -267,7 +420,7 @@ type MarketOrderResponse struct {
 
 func (x *MarketOrderResponse) Reset() {
 	*x = MarketOrderResponse{}
-	mi := &file_trade_proto_msgTypes[3]
+	mi := &file_trade_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -279,7 +432,7 @@ func (x *MarketOrderResponse) String() string {
 func (*MarketOrderResponse) ProtoMessage() {}
 
 func (x *MarketOrderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trade_proto_msgTypes[3]
+	mi := &file_trade_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +445,7 @@ func (x *MarketOrderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketOrderResponse.ProtoReflect.Descriptor instead.
 func (*MarketOrderResponse) Descriptor() ([]byte, []int) {
-	return file_trade_proto_rawDescGZIP(), []int{3}
+	return file_trade_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MarketOrderResponse) GetTxHash() string {
@@ -300,6 +453,110 @@ func (x *MarketOrderResponse) GetTxHash() string {
 		return x.TxHash
 	}
 	return ""
+}
+
+type ProcTokenPriceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenCa       string                 `protobuf:"bytes,1,opt,name=token_ca,json=tokenCa,proto3" json:"token_ca,omitempty"`
+	Price         string                 `protobuf:"bytes,2,opt,name=price,proto3" json:"price,omitempty"`
+	SwapType      SwapType               `protobuf:"varint,3,opt,name=swap_type,json=swapType,proto3,enum=trade.SwapType" json:"swap_type,omitempty"`
+	ChainId       int64                  `protobuf:"varint,4,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcTokenPriceRequest) Reset() {
+	*x = ProcTokenPriceRequest{}
+	mi := &file_trade_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcTokenPriceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcTokenPriceRequest) ProtoMessage() {}
+
+func (x *ProcTokenPriceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trade_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcTokenPriceRequest.ProtoReflect.Descriptor instead.
+func (*ProcTokenPriceRequest) Descriptor() ([]byte, []int) {
+	return file_trade_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ProcTokenPriceRequest) GetTokenCa() string {
+	if x != nil {
+		return x.TokenCa
+	}
+	return ""
+}
+
+func (x *ProcTokenPriceRequest) GetPrice() string {
+	if x != nil {
+		return x.Price
+	}
+	return ""
+}
+
+func (x *ProcTokenPriceRequest) GetSwapType() SwapType {
+	if x != nil {
+		return x.SwapType
+	}
+	return SwapType_SwapTypeAll
+}
+
+func (x *ProcTokenPriceRequest) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+type ProcTokenPriceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcTokenPriceResponse) Reset() {
+	*x = ProcTokenPriceResponse{}
+	mi := &file_trade_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcTokenPriceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcTokenPriceResponse) ProtoMessage() {}
+
+func (x *ProcTokenPriceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trade_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcTokenPriceResponse.ProtoReflect.Descriptor instead.
+func (*ProcTokenPriceResponse) Descriptor() ([]byte, []int) {
+	return file_trade_proto_rawDescGZIP(), []int{7}
 }
 
 var File_trade_proto protoreflect.FileDescriptor
@@ -319,16 +576,35 @@ const file_trade_proto_rawDesc = "" +
 	"\ris_double_out\x18\x05 \x01(\bR\visDoubleOut\x12 \n" +
 	"\fis_one_click\x18\x06 \x01(\bR\n" +
 	"isOneClick\x12.\n" +
-	"\x13user_wallet_address\x18\a \x01(\tR\x11userWalletAddress\".\n" +
+	"\x13user_wallet_address\x18\a \x01(\tR\x11userWalletAddress\"\xa8\x02\n" +
+	"\x17LimitMarketOrderRequest\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x05R\achainId\x12\x19\n" +
+	"\btoken_ca\x18\x02 \x01(\tR\atokenCa\x12,\n" +
+	"\tswap_type\x18\x03 \x01(\x0e2\x0f.trade.SwapTypeR\bswapType\x12\x1b\n" +
+	"\tamount_in\x18\x04 \x01(\tR\bamountIn\x12\"\n" +
+	"\ris_double_out\x18\x05 \x01(\bR\visDoubleOut\x12.\n" +
+	"\x13user_wallet_address\x18\x06 \x01(\tR\x11userWalletAddress\x12\x1b\n" +
+	"\tprice_usd\x18\a \x01(\tR\bpriceUsd\x12\x1b\n" +
+	"\torder_cap\x18\b \x01(\tR\borderCap\"4\n" +
+	"\x18LimitMarketOrderResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\".\n" +
 	"\x13MarketOrderResponse\x12\x17\n" +
-	"\atx_hash\x18\x01 \x01(\tR\x06txHash*.\n" +
+	"\atx_hash\x18\x01 \x01(\tR\x06txHash\"\x91\x01\n" +
+	"\x15ProcTokenPriceRequest\x12\x19\n" +
+	"\btoken_ca\x18\x01 \x01(\tR\atokenCa\x12\x14\n" +
+	"\x05price\x18\x02 \x01(\tR\x05price\x12,\n" +
+	"\tswap_type\x18\x03 \x01(\x0e2\x0f.trade.SwapTypeR\bswapType\x12\x19\n" +
+	"\bchain_id\x18\x04 \x01(\x03R\achainId\"\x18\n" +
+	"\x16ProcTokenPriceResponse*.\n" +
 	"\bSwapType\x12\x0f\n" +
 	"\vSwapTypeAll\x10\x00\x12\a\n" +
 	"\x03Buy\x10\x01\x12\b\n" +
-	"\x04Sell\x10\x022|\n" +
+	"\x04Sell\x10\x022\xa6\x02\n" +
 	"\x05Trade\x12'\n" +
 	"\x04Ping\x12\x0e.trade.Request\x1a\x0f.trade.Response\x12J\n" +
-	"\x11CreateMarketOrder\x12\x19.trade.MarketOrderRequest\x1a\x1a.trade.MarketOrderResponseB\tZ\a./tradeb\x06proto3"
+	"\x11CreateMarketOrder\x12\x19.trade.MarketOrderRequest\x1a\x1a.trade.MarketOrderResponse\x12Y\n" +
+	"\x16CreateLimitMarketOrder\x12\x1e.trade.LimitMarketOrderRequest\x1a\x1f.trade.LimitMarketOrderResponse\x12M\n" +
+	"\x0eProcTokenPrice\x12\x1c.trade.ProcTokenPriceRequest\x1a\x1d.trade.ProcTokenPriceResponseB\tZ\a./tradeb\x06proto3"
 
 var (
 	file_trade_proto_rawDescOnce sync.Once
@@ -343,25 +619,35 @@ func file_trade_proto_rawDescGZIP() []byte {
 }
 
 var file_trade_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_trade_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_trade_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_trade_proto_goTypes = []any{
-	(SwapType)(0),               // 0: trade.SwapType
-	(*Request)(nil),             // 1: trade.Request
-	(*Response)(nil),            // 2: trade.Response
-	(*MarketOrderRequest)(nil),  // 3: trade.MarketOrderRequest
-	(*MarketOrderResponse)(nil), // 4: trade.MarketOrderResponse
+	(SwapType)(0),                    // 0: trade.SwapType
+	(*Request)(nil),                  // 1: trade.Request
+	(*Response)(nil),                 // 2: trade.Response
+	(*MarketOrderRequest)(nil),       // 3: trade.MarketOrderRequest
+	(*LimitMarketOrderRequest)(nil),  // 4: trade.LimitMarketOrderRequest
+	(*LimitMarketOrderResponse)(nil), // 5: trade.LimitMarketOrderResponse
+	(*MarketOrderResponse)(nil),      // 6: trade.MarketOrderResponse
+	(*ProcTokenPriceRequest)(nil),    // 7: trade.ProcTokenPriceRequest
+	(*ProcTokenPriceResponse)(nil),   // 8: trade.ProcTokenPriceResponse
 }
 var file_trade_proto_depIdxs = []int32{
 	0, // 0: trade.MarketOrderRequest.swap_type:type_name -> trade.SwapType
-	1, // 1: trade.Trade.Ping:input_type -> trade.Request
-	3, // 2: trade.Trade.CreateMarketOrder:input_type -> trade.MarketOrderRequest
-	2, // 3: trade.Trade.Ping:output_type -> trade.Response
-	4, // 4: trade.Trade.CreateMarketOrder:output_type -> trade.MarketOrderResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 1: trade.LimitMarketOrderRequest.swap_type:type_name -> trade.SwapType
+	0, // 2: trade.ProcTokenPriceRequest.swap_type:type_name -> trade.SwapType
+	1, // 3: trade.Trade.Ping:input_type -> trade.Request
+	3, // 4: trade.Trade.CreateMarketOrder:input_type -> trade.MarketOrderRequest
+	4, // 5: trade.Trade.CreateLimitMarketOrder:input_type -> trade.LimitMarketOrderRequest
+	7, // 6: trade.Trade.ProcTokenPrice:input_type -> trade.ProcTokenPriceRequest
+	2, // 7: trade.Trade.Ping:output_type -> trade.Response
+	6, // 8: trade.Trade.CreateMarketOrder:output_type -> trade.MarketOrderResponse
+	5, // 9: trade.Trade.CreateLimitMarketOrder:output_type -> trade.LimitMarketOrderResponse
+	8, // 10: trade.Trade.ProcTokenPrice:output_type -> trade.ProcTokenPriceResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_trade_proto_init() }
@@ -375,7 +661,7 @@ func file_trade_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trade_proto_rawDesc), len(file_trade_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

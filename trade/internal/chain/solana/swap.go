@@ -243,64 +243,47 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 	amountIn, _ := decimal.NewFromString(marketTx.AmountIn)
 	slippage := marketTx.Slippage
 	indecimal := marketTx.InDecimal
-	outdecimal := marketTx.OutDecimal
 
 	amountIn = amountIn.Mul(decimal.NewFromInt(Decimals2Value[indecimal]))
 
-	var isBuy bool = true
 	var minOut int64
+	var tokenAmount uint64
 	var bondingCurveData *pumpfun.BondingCurveData
 	feeConfig, err := pumpfun.FindFeeConfigAddress()
 	if err != nil {
 		tx.Errorf("find fee config address err: %v", err)
 		return nil, err
 	}
-	if !price.IsZero() {
-		outAmt, calcMinOut := tx.CalcMinAmountOutByPrice(price, amountIn, slippage, indecimal, outdecimal, isBuy)
-		tx.Infof("CreateBuyInstruction: get amout is :%v, minmount is :%v", outAmt, calcMinOut)
-		minOut = calcMinOut
-	} else {
-	
-		bondingCurveData, err = pumpfun.FetchBondingCurve(tx.Client, bondingCurve.BondingCurve)
-
-		if err != nil {
-			return nil, fmt.Errorf("can't fetch bonding curve: %w", err)
-		}
-
-		if bondingCurveData.Complete {
-			return nil, fmt.Errorf("bonding curve is complete, can't buy")
-		}
-
-		tokenAmount, requiredSol, err := tx.fitBuyTokenAmountByMaxSolWithFee(uint64(amountIn.IntPart()), feeConfig, bondingCurveData)
-		if err != nil {
-			return nil, fmt.Errorf("can't fit token amount by max sol: %w", err)
-		}
-		slippageRate := AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slippage))).Div(AllBpDecimal)
-		minAmount := decimal.NewFromUint64(tokenAmount).Mul(slippageRate).IntPart()
-		tx.Infof("buy quote: amountIn=%s virtualSol=%s virtualToken=%s realSol=%s realToken=%s tokenAmount=%d requiredSol=%d minAmount=%d",
-			amountIn.String(),
-			bondingCurveData.VirtualSolReserves.String(),
-			bondingCurveData.VirtualTokenReserves.String(),
-			bondingCurveData.RealSolReserves.String(),
-			bondingCurveData.RealTokenReserves.String(),
-			tokenAmount,
-			requiredSol,
-			minAmount,
-		)
-
-		// maxSolCost := uint64(amountIn.IntPart())
-		// tokenAmount, requiredSol, err := fitBuyTokenAmountByMaxSol(maxSolCost, bondingCurveData)
-		// if err != nil {
-		// 	return nil, err
-		// }
-
-		// safeTokenAmount := applySafetyBps(tokenAmount, pumpBuySafetyBps)
-		// slippageRate := AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slippage))).Div(AllBpDecimal)
-		// minAmount := decimal.NewFromUint64(safeTokenAmount).Mul(slippageRate).IntPart()
-
-		//tx.Infof("CreateBuyInstruction: fit tokenAmount=%d requiredSol=%d safeTokenAmount=%d minAmount=%d", tokenAmount, requiredSol, safeTokenAmount, minAmount)
-		minOut = minAmount
+	bondingCurveData, err = pumpfun.FetchBondingCurve(tx.Client, bondingCurve.BondingCurve)
+	if err != nil {
+		return nil, fmt.Errorf("can't fetch bonding curve: %w", err)
 	}
+	if bondingCurveData.Complete {
+		return nil, fmt.Errorf("bonding curve is complete, can't buy")
+	}
+
+	tokenAmount, err = tx.calcAmountOutBybuy(amountIn, feeConfig, bondingCurveData)
+	if err != nil {
+		return nil, fmt.Errorf("can't quote token amount by max sol: %w", err)
+	}
+	if tokenAmount == 0 {
+		return nil, fmt.Errorf("quoted token amount is zero")
+	}
+
+	slippageRate := AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slippage))).Div(AllBpDecimal)
+	minAmount := decimal.NewFromUint64(tokenAmount).Mul(slippageRate).IntPart()
+	minOut = minAmount
+
+	tx.Infof("buy quote: amountIn=%s virtualSol=%s virtualToken=%s realSol=%s realToken=%s tokenAmount=%d minAmount=%d price=%s",
+		amountIn.String(),
+		bondingCurveData.VirtualSolReserves.String(),
+		bondingCurveData.VirtualTokenReserves.String(),
+		bondingCurveData.RealSolReserves.String(),
+		bondingCurveData.RealTokenReserves.String(),
+		tokenAmount,
+		minAmount,
+		price.String(),
+	)
 
 	//step 3 获取ata账户
 	var ataAccount aSDK.PublicKey
@@ -356,7 +339,9 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 		return nil, err
 	}
 
-	tx.Infof("minOut is %v and MaxSolCost is %v", minOut, amountIn.IntPart())
+	//tx.Infof("minOut is %v and MaxSolCost is %v", minOut, amountIn.IntPart())
+
+	tx.Infof("final buy instruction: amount=%d maxSolCost=%d minOut=%d", tokenAmount, uint64(amountIn.IntPart()), minOut)
 
 	//step 9 构建buy指令
 	return tx.BuildBuyInstructionWithCreatorVault(
@@ -381,19 +366,19 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 }
 
 func (tx *TxManager) BuildBuyInstructionWithCreatorVault(buyInstruction *swap_entity.BuyInstruction) aSDK.Instruction {
-	// Create accounts slice matching the correct PumpFun order (12 accounts total)
+	// Match the current pump buy IDL layout and account mutability.
 	accounts := []*aSDK.AccountMeta{
-		aSDK.Meta(buyInstruction.Global).WRITE(),                  // #0 - Global (WRITABLE)
+		aSDK.Meta(buyInstruction.Global),                          // #0 - Global
 		aSDK.Meta(buyInstruction.FeeRecipient).WRITE(),            // #1 - Fee Recipient (WRITABLE)
-		aSDK.Meta(buyInstruction.Mint).WRITE(),                    // #2 - Mint (WRITABLE)
+		aSDK.Meta(buyInstruction.Mint),                            // #2 - Mint
 		aSDK.Meta(buyInstruction.BondingCurve).WRITE(),            // #3 - Bonding Curve (WRITABLE)
 		aSDK.Meta(buyInstruction.AssociatedBondingCurve).WRITE(),  // #4 - Associated Bonding Curve (WRITABLE)
 		aSDK.Meta(buyInstruction.AssociatedUser).WRITE(),          // #5 - Associated User (WRITABLE)
 		aSDK.Meta(buyInstruction.User).WRITE().SIGNER(),           // #6 - User (WRITABLE, SIGNER)
 		aSDK.Meta(buyInstruction.SystemProgram),                   // #7 - System Program
-		aSDK.Meta(buyInstruction.TokenProgram).WRITE(),            // #8 - Token Program (WRITABLE)
+		aSDK.Meta(buyInstruction.TokenProgram),                    // #8 - Token Program
 		aSDK.Meta(buyInstruction.CreatorVault).WRITE(),            // #9 - Creator Vault (WRITABLE)
-		aSDK.Meta(buyInstruction.EventAuthority).WRITE(),          // #10 - Event Authority (WRITABLE)
+		aSDK.Meta(buyInstruction.EventAuthority),                  // #10 - Event Authority
 		aSDK.Meta(buyInstruction.Program),                         // #11 - Program
 		aSDK.Meta(buyInstruction.GlobalVolumeAccumulator).WRITE(), // #12 - Global Volume Accumulator (WRITABLE)
 		aSDK.Meta(buyInstruction.UserVolumeAccumulator).WRITE(),   // #13 - User Volume Accumulator (WRITABLE)
@@ -401,12 +386,13 @@ func (tx *TxManager) BuildBuyInstructionWithCreatorVault(buyInstruction *swap_en
 		aSDK.Meta(pumpfun.PumpFeeProgramAddress),                  // #15 - Fee Program
 	}
 
-	// Legacy buy instruction layout: discriminator + amount + max_sol_cost + track_volume (bool)
+	// buy(amount:u64, max_sol_cost:u64, track_volume:OptionBool{ value: bool })
 	data := make([]byte, 16)
 	copy(data[0:8], []byte{102, 6, 61, 18, 1, 218, 235, 234})
 	binary.LittleEndian.PutUint64(data[8:16], buyInstruction.Amount)
 	data = append(data, make([]byte, 8)...)
 	binary.LittleEndian.PutUint64(data[16:24], buyInstruction.MaxSolCost)
+	// OptionBool in the current IDL is encoded as a single bool payload.
 	data = append(data, byte(1))
 
 	return aSDK.NewInstruction(

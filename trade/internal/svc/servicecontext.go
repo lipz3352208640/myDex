@@ -5,12 +5,17 @@ import (
 	"log"
 	"myDex/market/market"
 	"myDex/model/solmodel"
+	"myDex/pkg/queue"
 	"myDex/trade/internal/chain/solana"
 	"myDex/trade/internal/config"
+	"myDex/trade/internal/entity"
 	"os"
 	"time"
 
+	"github.com/panjf2000/ants/v2"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/proc"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -18,15 +23,34 @@ import (
 )
 
 type ServiceContext struct {
-	Config          config.Config
-	Marketclient    market.MarketClient
-	DB              *gorm.DB
-	TradeOrderModel solmodel.TradeOrderModel
-	TxMananger      *solana.TxManager
+	Config           config.Config
+	Marketclient     market.MarketClient
+	DB               *gorm.DB
+	TradeOrderModel  solmodel.TradeOrderModel
+	Redis            *redis.Redis
+	DisruptorWrapper *queue.DisruptorWrapper[*entity.OrderMessage]
+	TxMananger       *solana.TxManager
+	//goroutine 协程池
+	Pool *ants.Pool
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	redisService := c.Redis.NewRedis()
 	marketClient := market.NewMarketClient(zrpc.MustNewClient(c.MarketService).Conn())
+
+	pool, err := ants.NewPool(0)
+	if err != nil {
+		logx.Error("NewPool error:", err)
+		os.Exit(1)
+	}
+	// 携程池的退出逻辑
+	proc.AddShutdownListener(func() {
+		logx.Info("stop pool")
+		//关闭线程池，最多等待30s进行任务收尾工作
+		if err := pool.ReleaseTimeout(30 * time.Second); err != nil {
+			logx.Errorf("stop pool timeout err:%s , cap is %d", err.Error(), pool.Cap())
+		}
+	})
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", c.Mysql.User, c.Mysql.Password, c.Mysql.Host, c.Mysql.Port, c.Mysql.Dbname)
 	gormLogger := logger.New(
@@ -65,6 +89,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Marketclient:    marketClient,
 		DB:              db,
 		TradeOrderModel: solmodel.NewTradeOrderModel(db),
+		Redis:           redisService,
+		Pool:            pool,
 		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly),
 	}
 }
