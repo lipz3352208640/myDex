@@ -24,6 +24,7 @@ const (
 	Market_FindNearTokenPrice_FullMethodName                         = "/market.Market/FindNearTokenPrice"
 	Market_FindNearBaseTokenPrice_FullMethodName                     = "/market.Market/FindNearBaseTokenPrice"
 	Market_FindTokenInfo_FullMethodName                              = "/market.Market/FindTokenInfo"
+	Market_FindPairInfoByPairAddress_FullMethodName                  = "/market.Market/FindPairInfoByPairAddress"
 )
 
 // MarketClient is the client API for Market service.
@@ -35,6 +36,7 @@ type MarketClient interface {
 	FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error)
 	FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error)
 	FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error)
+	FindPairInfoByPairAddress(ctx context.Context, in *PairInfoReq, opts ...grpc.CallOption) (*PairInfo, error)
 }
 
 type marketClient struct {
@@ -95,6 +97,16 @@ func (c *marketClient) FindTokenInfo(ctx context.Context, in *TokenInfoRequest, 
 	return out, nil
 }
 
+func (c *marketClient) FindPairInfoByPairAddress(ctx context.Context, in *PairInfoReq, opts ...grpc.CallOption) (*PairInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PairInfo)
+	err := c.cc.Invoke(ctx, Market_FindPairInfoByPairAddress_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MarketServer is the server API for Market service.
 // All implementations must embed UnimplementedMarketServer
 // for forward compatibility.
@@ -104,6 +116,7 @@ type MarketServer interface {
 	FindNearTokenPrice(context.Context, *TokenPriceRequest) (*TokenPriceResponse, error)
 	FindNearBaseTokenPrice(context.Context, *BaseTokenPriceRequest) (*BaseTokenPriceResponse, error)
 	FindTokenInfo(context.Context, *TokenInfoRequest) (*TokenInfoResponse, error)
+	FindPairInfoByPairAddress(context.Context, *PairInfoReq) (*PairInfo, error)
 	mustEmbedUnimplementedMarketServer()
 }
 
@@ -128,6 +141,9 @@ func (UnimplementedMarketServer) FindNearBaseTokenPrice(context.Context, *BaseTo
 }
 func (UnimplementedMarketServer) FindTokenInfo(context.Context, *TokenInfoRequest) (*TokenInfoResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FindTokenInfo not implemented")
+}
+func (UnimplementedMarketServer) FindPairInfoByPairAddress(context.Context, *PairInfoReq) (*PairInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindPairInfoByPairAddress not implemented")
 }
 func (UnimplementedMarketServer) mustEmbedUnimplementedMarketServer() {}
 func (UnimplementedMarketServer) testEmbeddedByValue()                {}
@@ -240,6 +256,24 @@ func _Market_FindTokenInfo_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Market_FindPairInfoByPairAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PairInfoReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MarketServer).FindPairInfoByPairAddress(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Market_FindPairInfoByPairAddress_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MarketServer).FindPairInfoByPairAddress(ctx, req.(*PairInfoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Market_ServiceDesc is the grpc.ServiceDesc for Market service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -266,6 +300,10 @@ var Market_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FindTokenInfo",
 			Handler:    _Market_FindTokenInfo_Handler,
+		},
+		{
+			MethodName: "FindPairInfoByPairAddress",
+			Handler:    _Market_FindPairInfoByPairAddress_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

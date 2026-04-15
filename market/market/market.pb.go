@@ -725,6 +725,58 @@ func (x *TokenInfoResponse) GetName() string {
 	return ""
 }
 
+type PairInfoReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChainId       int64                  `protobuf:"varint,1,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"` // Chain ID
+	PairAddr      string                 `protobuf:"bytes,2,opt,name=pair_addr,json=pairAddr,proto3" json:"pair_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PairInfoReq) Reset() {
+	*x = PairInfoReq{}
+	mi := &file_market_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PairInfoReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PairInfoReq) ProtoMessage() {}
+
+func (x *PairInfoReq) ProtoReflect() protoreflect.Message {
+	mi := &file_market_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PairInfoReq.ProtoReflect.Descriptor instead.
+func (*PairInfoReq) Descriptor() ([]byte, []int) {
+	return file_market_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PairInfoReq) GetChainId() int64 {
+	if x != nil {
+		return x.ChainId
+	}
+	return 0
+}
+
+func (x *PairInfoReq) GetPairAddr() string {
+	if x != nil {
+		return x.PairAddr
+	}
+	return ""
+}
+
 var File_market_proto protoreflect.FileDescriptor
 
 const file_market_proto_rawDesc = "" +
@@ -790,13 +842,17 @@ const file_market_proto_rawDesc = "" +
 	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x18\n" +
 	"\aprogram\x18\x03 \x01(\tR\aprogram\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name2\xf8\x02\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\"E\n" +
+	"\vPairInfoReq\x12\x19\n" +
+	"\bchain_id\x18\x01 \x01(\x03R\achainId\x12\x1b\n" +
+	"\tpair_addr\x18\x02 \x01(\tR\bpairAddr2\xbc\x03\n" +
 	"\x06Market\x12)\n" +
 	"\x04Ping\x12\x0f.market.Request\x1a\x10.market.Response\x12W\n" +
 	"*FindMaxSupplyPairInfoByTokenAddrAndChainID\x12\x17.market.PairInfoRequest\x1a\x10.market.PairInfo\x12K\n" +
 	"\x12FindNearTokenPrice\x12\x19.market.TokenPriceRequest\x1a\x1a.market.TokenPriceResponse\x12W\n" +
 	"\x16FindNearBaseTokenPrice\x12\x1d.market.BaseTokenPriceRequest\x1a\x1e.market.BaseTokenPriceResponse\x12D\n" +
-	"\rFindTokenInfo\x12\x18.market.TokenInfoRequest\x1a\x19.market.TokenInfoResponseB\n" +
+	"\rFindTokenInfo\x12\x18.market.TokenInfoRequest\x1a\x19.market.TokenInfoResponse\x12B\n" +
+	"\x19FindPairInfoByPairAddress\x12\x13.market.PairInfoReq\x1a\x10.market.PairInfoB\n" +
 	"Z\b./marketb\x06proto3"
 
 var (
@@ -811,7 +867,7 @@ func file_market_proto_rawDescGZIP() []byte {
 	return file_market_proto_rawDescData
 }
 
-var file_market_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_market_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_market_proto_goTypes = []any{
 	(*Request)(nil),                // 0: market.Request
 	(*Response)(nil),               // 1: market.Response
@@ -823,23 +879,26 @@ var file_market_proto_goTypes = []any{
 	(*TokenPriceResponse)(nil),     // 7: market.TokenPriceResponse
 	(*TokenInfoRequest)(nil),       // 8: market.TokenInfoRequest
 	(*TokenInfoResponse)(nil),      // 9: market.TokenInfoResponse
+	(*PairInfoReq)(nil),            // 10: market.PairInfoReq
 }
 var file_market_proto_depIdxs = []int32{
-	0, // 0: market.Market.Ping:input_type -> market.Request
-	2, // 1: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:input_type -> market.PairInfoRequest
-	6, // 2: market.Market.FindNearTokenPrice:input_type -> market.TokenPriceRequest
-	4, // 3: market.Market.FindNearBaseTokenPrice:input_type -> market.BaseTokenPriceRequest
-	8, // 4: market.Market.FindTokenInfo:input_type -> market.TokenInfoRequest
-	1, // 5: market.Market.Ping:output_type -> market.Response
-	3, // 6: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:output_type -> market.PairInfo
-	7, // 7: market.Market.FindNearTokenPrice:output_type -> market.TokenPriceResponse
-	5, // 8: market.Market.FindNearBaseTokenPrice:output_type -> market.BaseTokenPriceResponse
-	9, // 9: market.Market.FindTokenInfo:output_type -> market.TokenInfoResponse
-	5, // [5:10] is the sub-list for method output_type
-	0, // [0:5] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: market.Market.Ping:input_type -> market.Request
+	2,  // 1: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:input_type -> market.PairInfoRequest
+	6,  // 2: market.Market.FindNearTokenPrice:input_type -> market.TokenPriceRequest
+	4,  // 3: market.Market.FindNearBaseTokenPrice:input_type -> market.BaseTokenPriceRequest
+	8,  // 4: market.Market.FindTokenInfo:input_type -> market.TokenInfoRequest
+	10, // 5: market.Market.FindPairInfoByPairAddress:input_type -> market.PairInfoReq
+	1,  // 6: market.Market.Ping:output_type -> market.Response
+	3,  // 7: market.Market.FindMaxSupplyPairInfoByTokenAddrAndChainID:output_type -> market.PairInfo
+	7,  // 8: market.Market.FindNearTokenPrice:output_type -> market.TokenPriceResponse
+	5,  // 9: market.Market.FindNearBaseTokenPrice:output_type -> market.BaseTokenPriceResponse
+	9,  // 10: market.Market.FindTokenInfo:output_type -> market.TokenInfoResponse
+	3,  // 11: market.Market.FindPairInfoByPairAddress:output_type -> market.PairInfo
+	6,  // [6:12] is the sub-list for method output_type
+	0,  // [0:6] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_market_proto_init() }
@@ -853,7 +912,7 @@ func file_market_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_market_proto_rawDesc), len(file_market_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -28,6 +28,7 @@ type ServiceContext struct {
 	BlockModel   solmodel.BlockModel
 	TokenModel   solmodel.TokenModel
 	PairModel    solmodel.PairModel
+	TradeModel   solmodel.TradeModel
 	TradeService tradeclient.Trade
 }
 

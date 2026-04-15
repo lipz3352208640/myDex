@@ -205,3 +205,27 @@ func (l *CreateLimitMarketOrderLogic) validateInput(in *trade.LimitMarketOrderRe
 	}
 	return nil
 }
+
+func (l *CreateLimitMarketOrderLogic) CreateTradeOrder(order *solmodel.TradeOrder) error {
+	
+	model := solmodel.NewTradeOrderModel(l.svcCtx.DB)
+	if err := model.InsertWithLog(l.ctx, order); err != nil {
+		return fmt.Errorf("CreateLimitOrder Insert err: %s", err.Error())
+	}
+
+	switch order.TradeType {
+	case int64(enum.TradeType_Limit):
+		if err := l.SaveToRedis(order); err != nil {
+			
+			order.Status = int64(enum.OrderStatus_Fail)
+			if err := model.UpdateOrder(l.ctx, order, []string{"status"}); err != nil {
+				l.Errorf("addOrderToRedis err:%s", err.Error())
+				return err
+			}
+			return err
+		}
+	default:
+		return fmt.Errorf("err tradetype:%v", order.TradeType)
+	}
+	return nil
+}

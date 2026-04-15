@@ -154,14 +154,14 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		//获取流动性池子中token的流动性
 
 		//const TokenReservesDiff = 279900000000000 // Token虚拟储备量 - Token实际储备量
-		//realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
-		//realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
+		realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
+		realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
 
 		//fmt.Println("token真实流动性：", realTokenReserves)
 		//fmt.Println("sol真实流动性：", realSolReserves)
 
-		currentTokenInPoolAmount := decimal.New(int64(event.VirtualTokenReserves), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
-		CurrentBaseTokenInPoolAmount := decimal.New(int64(event.VirtualSolReserves), -int32(constant.SolDecimal)).InexactFloat64()
+		currentTokenInPoolAmount := decimal.New(int64(realTokenReserves), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
+		CurrentBaseTokenInPoolAmount := decimal.New(int64(realSolReserves), -int32(constant.SolDecimal)).InexactFloat64()
 
 		var tradeType string
 		if event.IsBuy {
@@ -188,6 +188,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 			BlockTime:                    block.BlockTime.Unix(),
 			CurrentTokenInPoolAmount:     currentTokenInPoolAmount,
 			CurrentBaseTokenInPoolAmount: CurrentBaseTokenInPoolAmount,
+			LogIndex:                     txDecode.PumpEventIndex,
 			PairInfo: entity.Pair{
 				ChainId: constant.SolChainId,
 				Addr:    curveAccountAddress,
