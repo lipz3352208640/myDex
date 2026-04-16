@@ -52,8 +52,9 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		p.Infof("decode instruction type is failed, err = %v", err)
 		return nil
 	}
+	fmt.Println("指令 buy/sell", instType)
 	//如果是买卖指令，从meta log中解析出event事件
-	if instType == constant.PumpBuyInstruction || instType == constant.PumpSellInstruction {
+	if instType == constant.PumpBuyInstruction || instType == constant.PumpSellInstruction || instType == constant.PumpBuyInstructionTest {
 
 		price := txDecode.Price
 		tokenAccountMap := txDecode.TokenAccountMap
@@ -147,6 +148,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 
 		//计算token price
 		totalUSD := decimal.NewFromFloat(realSolAccount).Mul(decimal.NewFromFloat(price)).InexactFloat64()
+		fmt.Println("totalUSD is: ", totalUSD)
 		tokenPrice := decimal.NewFromFloat(totalUSD).Div(decimal.NewFromFloat(realTokenAccount)).InexactFloat64()
 
 		p.Infof("this transaction signature is %s, price is %f", signature, tokenPrice)
@@ -154,14 +156,14 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		//获取流动性池子中token的流动性
 
 		//const TokenReservesDiff = 279900000000000 // Token虚拟储备量 - Token实际储备量
-		//realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
-		//realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
+		realTokenReserves := event.VirtualTokenReserves - constant.TokenReservesDiff
+		realSolReserves := event.VirtualSolReserves - constant.SolReservesDiff
 
 		//fmt.Println("token真实流动性：", realTokenReserves)
 		//fmt.Println("sol真实流动性：", realSolReserves)
 
-		currentTokenInPoolAmount := decimal.New(int64(event.VirtualTokenReserves), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
-		CurrentBaseTokenInPoolAmount := decimal.New(int64(event.VirtualSolReserves), -int32(constant.SolDecimal)).InexactFloat64()
+		currentTokenInPoolAmount := decimal.New(int64(realTokenReserves), -int32(tokenAccount.TokenDecimal)).InexactFloat64()
+		CurrentBaseTokenInPoolAmount := decimal.New(int64(realSolReserves), -int32(constant.SolDecimal)).InexactFloat64()
 
 		var tradeType string
 		if event.IsBuy {
@@ -176,6 +178,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 			Slot:                         txDecode.Block.Slot,
 			PairAddr:                     curveAccountAddress,
 			TxHash:                       signature,
+			HashId:                       fmt.Sprintf("%v#%d", txDecode.Slot, txDecode.HashId),
 			Maker:                        walletAccountAddress,
 			Type:                         tradeType,
 			BaseTokenAmount:              realSolAccount,
@@ -188,6 +191,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 			BlockTime:                    block.BlockTime.Unix(),
 			CurrentTokenInPoolAmount:     currentTokenInPoolAmount,
 			CurrentBaseTokenInPoolAmount: CurrentBaseTokenInPoolAmount,
+			LogIndex:                     txDecode.PumpEventIndex,
 			PairInfo: entity.Pair{
 				ChainId: constant.SolChainId,
 				Addr:    curveAccountAddress,

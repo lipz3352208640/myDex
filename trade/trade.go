@@ -10,6 +10,7 @@ import (
 	"myDex/trade/internal/proclimiteorder"
 	"myDex/trade/internal/server"
 	"myDex/trade/internal/svc"
+	"myDex/trade/internal/ticker"
 	"myDex/trade/trade"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -31,6 +32,14 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	ctx.DisruptorWrapper = newDisruptor(ctx)
 
+	serviceGroup := service.NewServiceGroup()
+	defer serviceGroup.Stop()
+
+	{
+		doubleOutTicker := ticker.NewDoubleOutTicker(ctx)
+		serviceGroup.Add(doubleOutTicker)
+	}
+
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		trade.RegisterTradeServer(grpcServer, server.NewTradeServer(ctx))
 
@@ -38,10 +47,11 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	defer s.Stop()
+	serviceGroup.Add(s)
+	//defer s.Stop()
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
-	s.Start()
+	serviceGroup.Start()
 }
 
 func newDisruptor(svc *svc.ServiceContext) *queue.DisruptorWrapper[*entity.OrderMessage] {

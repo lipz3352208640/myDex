@@ -124,11 +124,54 @@ func (t *TradeServiceImpl) BatchSaveByTrade(trades []*entity.TradeWithPair) {
 			t.Errorf("BatchSaveByTrade:SavePair err is %w", err)
 		}
 
+		err = t.SaveTrade(t.ctx, trade)
+		if err != nil {
+			t.Errorf("BatchSaveByTrade:SaveTrade err is %w", err)
+		}
+
 		t.sendTokenPrice2Trade(t.ctx, trade)
 
 	}
 	fmt.Println("save BatchSaveByTrade successful")
 
+}
+
+func (t *TradeServiceImpl) SaveTrade(ctx context.Context, trade *entity.TradeWithPair) (err error) {
+	if trade == nil {
+		return fmt.Errorf("SaveTrade: trade is nil")
+	}
+	if t.sc == nil || t.sc.TradeModel == nil {
+		return fmt.Errorf("SaveTrade: trade model is nil")
+	}
+
+	tradeAtDB := &solmodel.Trade{
+		ChainId:           int64(trade.ChainIdInt),
+		PairAddr:          trade.PairAddr,
+		TxHash:            trade.TxHash,
+		HashId:            trade.HashId,
+		Maker:             trade.Maker,
+		TradeType:         trade.Type,
+		BaseTokenAmount:   trade.BaseTokenAmount,
+		TokenAmount:       trade.TokenAmount,
+		BaseTokenPriceUsd: trade.BaseTokenPriceUSD,
+		TokenPriceUsd:     trade.TokenPriceUSD,
+		TotalUsd:          trade.TotalUSD,
+		To:                trade.To,
+		BlockNum:          trade.BlockNum,
+		BlockTime:         time.Unix(trade.BlockTime, 0),
+		SwapName:          trade.SwapName,
+	}
+	data, err := t.sc.TradeModel.FindOneByHashId(ctx, trade.HashId)
+	if err != nil || data == nil {
+		t.Errorf("SaveTrade insert failed: txHash=%s hashId=%s err=%v", trade.TxHash, trade.HashId, err)
+		if errors.Is(err, solmodel.ErrNotFound) {
+			err = t.sc.TradeModel.Insert(ctx, tradeAtDB)
+			if err != nil {
+				return fmt.Errorf("SaveTrade:Insert err is %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (t *TradeServiceImpl) sendTokenPrice2Trade(ctx context.Context, tradeWithPair *entity.TradeWithPair) {

@@ -47,3 +47,8 @@ func (s *MarketServer) FindTokenInfo(ctx context.Context, in *market.TokenInfoRe
 	l := logic.NewFindTokenInfoLogic(ctx, s.svcCtx)
 	return l.FindTokenInfo(in)
 }
+
+func (s *MarketServer) FindPairInfoByPairAddress(ctx context.Context, in *market.PairInfoReq) (*market.PairInfo, error) {
+	l := logic.NewFindPairInfoByPairAddressLogic(ctx, s.svcCtx)
+	return l.FindPairInfoByPairAddress(in)
+}

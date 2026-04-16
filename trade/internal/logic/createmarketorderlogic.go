@@ -8,6 +8,7 @@ import (
 	"myDex/model/solmodel"
 	"myDex/pkg/constant"
 	"myDex/pkg/xcode"
+	solanachain "myDex/trade/internal/chain/solana"
 	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/internal/enum"
 	"myDex/trade/internal/svc"
@@ -90,7 +91,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		return nil, xcode.AmountErr
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(l.ctx, 5*time.Second)
 	defer cancel()
 
 	//根据trade pair，获取token,sol 价格，以及token,sol池子数量，用于计算最小数量等
@@ -140,7 +141,12 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 	solPriceDecimal := decimal.NewFromFloat(baseTokenPrice)
 	tokenPriceDecimal := decimal.NewFromFloat(tokenPrice)
 	//挂单价格 1个token兑换几个sol
-	orderPriceBase := tokenPriceDecimal.Div(solPriceDecimal)
+	var orderPriceBase decimal.Decimal
+	if tokenPriceDecimal.IsZero() {
+		orderPriceBase = decimal.NewFromFloat(0)
+	} else {
+		orderPriceBase = tokenPriceDecimal.Div(solPriceDecimal)
+	}
 	fmt.Println("solPriceDecimal:", solPriceDecimal.String())
 	fmt.Println("tokenPriceDecimal:", tokenPriceDecimal.String())
 	fmt.Println("orderPriceBase:", orderPriceBase.String())
@@ -174,7 +180,7 @@ func (l *CreateMarketOrderLogic) CreateMarketOrder(in *trade.MarketOrderRequest)
 		PairCa:        pairInfo.Address,
 		WalletAddress: in.UserWalletAddress,
 	}
-	ctx, cancel = context.WithTimeout(context.Background(), 15000*time.Second)
+	ctx, cancel = context.WithTimeout(l.ctx, 15*time.Second)
 	defer cancel()
 	err = l.svcCtx.TradeOrderModel.InsertWithLog(ctx, tradeOrder)
 
@@ -279,11 +285,13 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 			order.Slippage = 7000
 			l.Info("AutoSlippageRetry")
 		}
-		txHash, err = l.createAndSendTx(param)
+
+		//txHash, err = l.createAndSendTx(param)
+		txHash, err = l.CreateAndSendPumpfunBuyWithTokenSwap(param, "/root/dev-token-swap-pool.json", "0.01", "0")
 		if err != nil {
 			err = convertSwapErr(pairInfo.Name, err)
 		} else {
-			return txHash, err
+			break
 		}
 	}
 	err = l.updateDbByTxResult(order, param, txHash, err)
@@ -297,33 +305,89 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 	chainId := marketTx.ChainId
 	if chainId == constant.SolChainIdInt {
 		txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
-
 		if err != nil {
-
 			return "", fmt.Errorf("Failed to build unsigned transaction: %w", err)
 		}
-		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(l.ctx, txToString)
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(timeoutCtx, txToString)
 		if err != nil {
 			l.Errorf("Failed to sign transaction: %v", err)
 			return "", fmt.Errorf("Failed to sign transaction: %w", err)
 		}
-		timeoutCtx, cancel := context.WithTimeout(context.TODO(), 150000*time.Second)
+
+		timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
 		if err != nil {
 			l.Errorf("Failed to send transaction: %v", err)
 			return "", fmt.Errorf("Failed to send transaction: %w", err)
 		}
+		if txHash == "" {
+			return "", fmt.Errorf("send transaction returned empty tx hash")
+		}
 		return txHash, nil
 	}
 	return "", fmt.Errorf("unsupported chain id: %d", chainId)
+}
+
+// CreateAndSendPumpfunBuyWithTokenSwap is a temporary helper that keeps the
+// existing market order flow untouched and builds one transaction containing:
+// 1. the original pumpfun buy instructions
+// 2. a classic SPL token-swap instruction sequence
+func (l *CreateMarketOrderLogic) CreateAndSendPumpfunBuyWithTokenSwap(
+	marketTx *entity.MarketTx,
+	tokenSwapConfigPath string,
+	swapAmountUI string,
+	minOutUI string,
+) (string, error) {
+	if marketTx == nil {
+		return "", fmt.Errorf("marketTx is nil")
+	}
+	if marketTx.ChainId != constant.SolChainIdInt {
+		return "", fmt.Errorf("unsupported chain id: %d", marketTx.ChainId)
+	}
+
+	poolCfg, err := solanachain.LoadTokenSwapPoolConfig(tokenSwapConfigPath)
+	if err != nil {
+		return "", fmt.Errorf("load token swap pool config: %w", err)
+	}
+
+	txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransactionPumpfunWithTokenSwap(
+		l.ctx,
+		marketTx,
+		poolCfg,
+		swapAmountUI,
+		minOutUI,
+	)
+	if err != nil {
+		return "", fmt.Errorf("build combo unsigned transaction: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(timeoutCtx, txToString)
+	if err != nil {
+		return "", fmt.Errorf("sign combo transaction: %w", err)
+	}
+
+	timeoutCtx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
+	if err != nil {
+		return "", fmt.Errorf("send combo transaction: %w", err)
+	}
+	if txHash == "" {
+		return "", fmt.Errorf("send combo transaction returned empty tx hash")
+	}
+	return txHash, nil
 }
 
 func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, swapType trade.SwapType) (string, string, error) {
 
 	//获取out token的合于地址，用于创建ata账户指令
 	outTokenAddree := pairInfo.TokenAddress
-	ctx, cancel := context.WithTimeout(context.Background(), 1000000000*time.Second)
+	ctx, cancel := context.WithTimeout(l.ctx, 5*time.Second)
 	defer cancel()
 	outTokenInfo, err := l.svcCtx.Marketclient.FindTokenInfo(ctx, &market.TokenInfoRequest{
 		ChainId:   pairInfo.ChainId,
@@ -372,7 +436,7 @@ func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
 		order.Status = int64(enum.OrderStatus_OnChain)
 		order.TxHash = txHash
 		updateField = append(updateField, "status", "tx_hash")
-
+		fmt.Printf("插入order %#v", order)
 		err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, updateField)
 		if err != nil {
 			return fmt.Errorf("update order err is %w", err)

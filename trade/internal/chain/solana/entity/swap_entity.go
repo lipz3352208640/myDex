@@ -3,8 +3,8 @@ package entity
 import "github.com/gagliardetto/solana-go"
 
 type SellInstruction struct {
-	Amount                 *uint64
-	MinSolOutput           *uint64
+	Amount                 uint64
+	MinSolOutput           uint64
 	Global                 solana.PublicKey
 	FeeRecipient           solana.PublicKey
 	Mint                   solana.PublicKey
@@ -22,8 +22,8 @@ type SellInstruction struct {
 }
 
 type BuyInstruction struct {
-	Amount                  uint64
-	MaxSolCost              uint64
+	SpendableSolIn          uint64
+	MinTokensOut            uint64
 	Global                  solana.PublicKey
 	FeeRecipient            solana.PublicKey
 	Mint                    solana.PublicKey

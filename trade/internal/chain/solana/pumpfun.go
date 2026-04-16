@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"myDex/pkg/constant"
-	pumpfun "myDex/pkg/pump"
 	"myDex/pkg/xcode"
 	"time"
 
@@ -54,6 +53,11 @@ type PumpFunInstruction interface {
 	CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error)
 }
 
+/*************  ✨ Windsurf Command ⭐  *************/
+// CreateGasByGasFee creates a transaction to set gas price by gas fee.
+// This function will create two instructions: one for setting compute unit price and one for setting compute unit limit.
+
+/*******  8494295a-ffb5-42a3-beb6-cea4e0e05b2f  *******/
 func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error) {
 	var instructionNew aSDK.Instruction
 	var instructions []aSDK.Instruction
@@ -115,7 +119,7 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *ent
 	instructions = append(instructions, budgetInstructions...)
 
 	//判断支付的费用和钱包余额对比
-	debugCtx, cancel := context.WithTimeout(context.Background(), 5000000*time.Second)
+	debugCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	out, err := tx.Client.GetBalance(debugCtx, wallet, rpc.CommitmentConfirmed)
 
@@ -173,21 +177,6 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *ent
 	//构建buy和sell指令
 	if marketTx.SwapType == int32(trade.SwapType_Buy) {
 		tx.Debugf("Creating pumpfun buy instruction, amount: %s, amountUint64: %d", marketTx.AmountIn, amountUint64)
-		userVolumeAccumulator, err := pumpfun.FindUserVolumeAccumulatorAddress(marketTx.UserWalletAddress)
-		if err != nil {
-			tx.Errorf("find user volume accumulator address err : %v", err)
-			return nil, err
-		}
-
-		needInitUserVolumeAccumulator, err := tx.shouldInitUserVolumeAccumulator(userVolumeAccumulator)
-		if err != nil {
-			tx.Errorf("check user volume accumulator err : %v", err)
-			return nil, err
-		}
-		if needInitUserVolumeAccumulator {
-			tx.Infof("user volume accumulator not found, initializing: %s", userVolumeAccumulator.String())
-			instructions = append(instructions, tx.BuildInitUserVolumeAccumulatorInstruction(marketTx.UserWalletAddress, userVolumeAccumulator))
-		}
 
 		buyInstruction, err := tx.CreateBuyInstruction(marketTx)
 		if err != nil {

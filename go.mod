@@ -15,6 +15,7 @@ require (
 	github.com/shopspring/decimal v1.4.0
 	github.com/smarty/go-disruptor v0.5.0
 	github.com/stretchr/testify v1.11.1
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/zeromicro/go-zero v1.6.2
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
@@ -31,6 +32,7 @@ require (
 	github.com/mostynb/zstdpool-freelist v0.0.0-20201229113212-927304c0c3b1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/streamingfast/logging v0.0.0-20250404134358-92b15d2fbd2e // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.3 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
 	golang.org/x/crypto v0.47.0 // indirect

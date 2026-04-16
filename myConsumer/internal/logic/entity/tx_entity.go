@@ -16,6 +16,7 @@ type TxDecodeEntity struct {
 	Signature       string
 	Block           *solmodel.Block
 	Slot            uint64
+	HashId          int
 	PumpEventIndex  int
 	AccountKeys     []common.PublicKey
 	PumpEvents      []*PumpEvent

@@ -6,7 +6,7 @@ const (
 	FeeReceiver = "77r1L6TyggUhwFkk3wFrMMkYS7xK6xJu78wuzMjr2PHZ"
 
 	RaydiumV4SwapCU   = 150_000
-	PumpFunSwapCU     = 100_000
+	PumpFunSwapCU     = 300_000
 	RaydiumClmmSwapCu = 250_000
 	RaydiumCpmmSwapCu = 150_000
 	PumpSwapCU        = 150_000

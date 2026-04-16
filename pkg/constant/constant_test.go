@@ -16,7 +16,7 @@ func ByteToHex(bytes []byte) string {
 
 func TestByteToHex(t *testing.T) {
 
-	bytes := []byte{102, 6, 61, 18, 1, 218, 235, 234}
+	bytes := []byte{56, 252, 116, 8, 158, 223, 205, 95}
 	hexString := ByteToHex(bytes)
 	fmt.Println(hexString)
 
@@ -31,5 +31,9 @@ func TestByteToHex(t *testing.T) {
 	base58String := base58.Encode(b2)
 
 	fmt.Println(s)
+	fmt.Println(base58String)
+
+	b3 := []byte{238, 66, 104, 97, 103, 199, 153, 246, 233, 217, 73, 206, 78, 147, 44, 70, 8, 246, 66, 251, 142, 246, 241, 9, 144, 40, 178, 143, 255, 209, 15, 65, 246, 114, 16, 150, 199, 18, 114, 165, 41, 186, 140, 2, 200, 33, 131, 0, 174, 240, 240, 228, 50, 114, 161, 245, 220, 75, 140, 249, 142, 124, 28, 47}
+	base58String = base58.Encode(b3)
 	fmt.Println(base58String)
 }

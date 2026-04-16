@@ -8,6 +8,9 @@ const (
 	// pumpfun：sell 指令
 	PumpSellInstruction uint64 = 0xad837f01a485e633
 
+	// pumpfun：sell 指令
+	PumpBuyInstructionTest uint64 = 0x5fcddf9e0874fc38
+
 	//区块处理状态
 	BlockProcessed = 1
 	BlockFailed    = 2
@@ -21,7 +24,7 @@ const (
 	//token mint
 	Wsol = "So11111111111111111111111111111111111111112"
 	//Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-	Usdc       = "DTeMTQv7jdRMHmjQxnvhkEKsWyF8UCRg7wN46yzbCE7v"
+	Usdc       = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 	SolDecimal = 9
 	//token 虚拟流动量和真实流动量的差值
 	TokenReservesDiff = 279900000000000

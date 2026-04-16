@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"myDex/pkg/constant"
 	pumpfun "myDex/pkg/pump"
+	pumpidl "myDex/pkg/pump/generate"
 	token2022 "myDex/pkg/token2022"
 	"myDex/pkg/xcode"
 	"myDex/trade/internal/chain/solana/entity"
@@ -240,11 +241,12 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 
 	//step 2 获取amount。计算最小输出金额
 	price, _ := decimal.NewFromString(marketTx.Price)
-	amountIn, _ := decimal.NewFromString(marketTx.AmountIn)
+	amountInRaw, _ := decimal.NewFromString(marketTx.AmountIn)
 	slippage := marketTx.Slippage
 	indecimal := marketTx.InDecimal
+	outdecimal := marketTx.OutDecimal
 
-	amountIn = amountIn.Mul(decimal.NewFromInt(Decimals2Value[indecimal]))
+	amountIn := amountInRaw.Mul(decimal.NewFromInt(Decimals2Value[indecimal]))
 
 	var minOut int64
 	var tokenAmount uint64
@@ -274,7 +276,10 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 	minAmount := decimal.NewFromUint64(tokenAmount).Mul(slippageRate).IntPart()
 	minOut = minAmount
 
-	tx.Infof("buy quote: amountIn=%s virtualSol=%s virtualToken=%s realSol=%s realToken=%s tokenAmount=%d minAmount=%d price=%s",
+	tx.Infof("buy quote details: amountInInput=%s inDecimals=%d outDecimals=%d amountInBaseUnits=%s virtualSol=%s virtualToken=%s realSol=%s realToken=%s tokenAmount=%d minAmount=%d price=%s outMint=%s inMint=%s",
+		amountInRaw.String(),
+		indecimal,
+		outdecimal,
 		amountIn.String(),
 		bondingCurveData.VirtualSolReserves.String(),
 		bondingCurveData.VirtualTokenReserves.String(),
@@ -283,6 +288,8 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 		tokenAmount,
 		minAmount,
 		price.String(),
+		marketTx.OutMint.String(),
+		marketTx.InMint.String(),
 	)
 
 	//step 3 获取ata账户
@@ -315,6 +322,8 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 		return nil, err
 	}
 
+	tx.Infof("feeRecipient is %s", feeRecipient.String())
+
 	//step 6 global_volume_accumulator
 	globalVolumeAccumulator, err := pumpfun.FindGlobalVolumeAccumulatorAddress()
 	if err != nil {
@@ -339,15 +348,11 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 		return nil, err
 	}
 
-	//tx.Infof("minOut is %v and MaxSolCost is %v", minOut, amountIn.IntPart())
-
-	tx.Infof("final buy instruction: amount=%d maxSolCost=%d minOut=%d", tokenAmount, uint64(amountIn.IntPart()), minOut)
-
 	//step 9 构建buy指令
 	return tx.BuildBuyInstructionWithCreatorVault(
 		&swap_entity.BuyInstruction{
-			Amount:                  uint64(minOut),
-			MaxSolCost:              uint64(amountIn.IntPart()),
+			SpendableSolIn:          uint64(amountIn.IntPart()),
+			MinTokensOut:            uint64(minOut),
 			Global:                  pumpfun.GlobalPumpFunAddress,
 			FeeRecipient:            feeRecipient,
 			Mint:                    marketTx.OutMint,
@@ -366,40 +371,41 @@ func (tx *TxManager) CreateBuyInstruction(marketTx *entity.MarketTxExt) (aSDK.In
 }
 
 func (tx *TxManager) BuildBuyInstructionWithCreatorVault(buyInstruction *swap_entity.BuyInstruction) aSDK.Instruction {
-	// Match the current pump buy IDL layout and account mutability.
-	accounts := []*aSDK.AccountMeta{
-		aSDK.Meta(buyInstruction.Global),                          // #0 - Global
-		aSDK.Meta(buyInstruction.FeeRecipient).WRITE(),            // #1 - Fee Recipient (WRITABLE)
-		aSDK.Meta(buyInstruction.Mint),                            // #2 - Mint
-		aSDK.Meta(buyInstruction.BondingCurve).WRITE(),            // #3 - Bonding Curve (WRITABLE)
-		aSDK.Meta(buyInstruction.AssociatedBondingCurve).WRITE(),  // #4 - Associated Bonding Curve (WRITABLE)
-		aSDK.Meta(buyInstruction.AssociatedUser).WRITE(),          // #5 - Associated User (WRITABLE)
-		aSDK.Meta(buyInstruction.User).WRITE().SIGNER(),           // #6 - User (WRITABLE, SIGNER)
-		aSDK.Meta(buyInstruction.SystemProgram),                   // #7 - System Program
-		aSDK.Meta(buyInstruction.TokenProgram),                    // #8 - Token Program
-		aSDK.Meta(buyInstruction.CreatorVault).WRITE(),            // #9 - Creator Vault (WRITABLE)
-		aSDK.Meta(buyInstruction.EventAuthority),                  // #10 - Event Authority
-		aSDK.Meta(buyInstruction.Program),                         // #11 - Program
-		aSDK.Meta(buyInstruction.GlobalVolumeAccumulator).WRITE(), // #12 - Global Volume Accumulator (WRITABLE)
-		aSDK.Meta(buyInstruction.UserVolumeAccumulator).WRITE(),   // #13 - User Volume Accumulator (WRITABLE)
-		aSDK.Meta(buyInstruction.FeeConfig),                       // #14 - Fee Config
-		aSDK.Meta(pumpfun.PumpFeeProgramAddress),                  // #15 - Fee Program
+
+	bondingCurveV2, err := pumpfun.FindBondingCurveV2Address(buyInstruction.Mint)
+	if err != nil {
+		panic(fmt.Errorf("find bonding_curve_v2 address: %w", err))
 	}
 
-	// buy(amount:u64, max_sol_cost:u64, track_volume:OptionBool{ value: bool })
-	data := make([]byte, 16)
-	copy(data[0:8], []byte{102, 6, 61, 18, 1, 218, 235, 234})
-	binary.LittleEndian.PutUint64(data[8:16], buyInstruction.Amount)
-	data = append(data, make([]byte, 8)...)
-	binary.LittleEndian.PutUint64(data[16:24], buyInstruction.MaxSolCost)
-	// OptionBool in the current IDL is encoded as a single bool payload.
-	data = append(data, byte(1))
-
-	return aSDK.NewInstruction(
+	builder := pumpidl.NewBuyExactSolInInstruction(
+		buyInstruction.SpendableSolIn,
+		buyInstruction.MinTokensOut,
+		pumpidl.OptionBool{Elem0: false},
+		buyInstruction.Global,
+		buyInstruction.FeeRecipient,
+		buyInstruction.Mint,
+		buyInstruction.BondingCurve,
+		buyInstruction.AssociatedBondingCurve,
+		buyInstruction.AssociatedUser,
+		buyInstruction.User,
+		buyInstruction.SystemProgram,
+		buyInstruction.TokenProgram,
+		buyInstruction.CreatorVault,
+		buyInstruction.EventAuthority,
 		buyInstruction.Program,
-		accounts,
-		data,
+		buyInstruction.GlobalVolumeAccumulator,
+		buyInstruction.UserVolumeAccumulator,
+		buyInstruction.FeeConfig,
+		pumpfun.PumpFeeProgramAddress,
 	)
+
+	builder.AccountMetaSlice = append(builder.AccountMetaSlice, aSDK.Meta(bondingCurveV2))
+
+	instruction, err := builder.ValidateAndBuild()
+	if err != nil {
+		panic(fmt.Errorf("build buy_exact_sol_in instruction: %w", err))
+	}
+	return instruction
 }
 
 func (tx *TxManager) BuildInitUserVolumeAccumulatorInstruction(user, userVolumeAccumulator solana.PublicKey) aSDK.Instruction {
@@ -464,7 +470,7 @@ func (tx *TxManager) CreateSellInstruction(marketTx *entity.MarketTxExt) (aSDK.I
 	outdecimal := marketTx.OutDecimal
 	var isBuy bool = false
 	var minOut int64
-	if price.IsZero() {
+	if !price.IsZero() {
 		outAmt, calcMinOut := tx.CalcMinAmountOutByPrice(price, amountIn, slippage, indecimal, outdecimal, isBuy)
 		tx.Infof("CreateBuyInstruction: get amout is :%v, minmount is :%v", outAmt, calcMinOut)
 		minOut = calcMinOut
@@ -504,17 +510,17 @@ func (tx *TxManager) CreateSellInstruction(marketTx *entity.MarketTxExt) (aSDK.I
 	}
 
 	//step 6 global_volume_accumulator
-	globalVolumeAccumulator, err := pumpfun.FindGlobalVolumeAccumulatorAddress()
-	if err != nil {
-		tx.Errorf("find global volume accumulator address err: %v", err)
-		return nil, err
-	}
-	//step 7 user_volume_accumulator
-	userVolumeAccumulator, err := pumpfun.FindUserVolumeAccumulatorAddress(marketTx.UserWalletAddress)
-	if err != nil {
-		tx.Errorf("find user volume accumulator address err: %v", err)
-		return nil, err
-	}
+	// globalVolumeAccumulator, err := pumpfun.FindGlobalVolumeAccumulatorAddress()
+	// if err != nil {
+	// 	tx.Errorf("find global volume accumulator address err: %v", err)
+	// 	return nil, err
+	// }
+	// //step 7 user_volume_accumulator
+	// userVolumeAccumulator, err := pumpfun.FindUserVolumeAccumulatorAddress(marketTx.UserWalletAddress)
+	// if err != nil {
+	// 	tx.Errorf("find user volume accumulator address err: %v", err)
+	// 	return nil, err
+	// }
 
 	//step 8 fee_config
 	feeConfig, err := pumpfun.FindFeeConfigAddress()
@@ -524,25 +530,23 @@ func (tx *TxManager) CreateSellInstruction(marketTx *entity.MarketTxExt) (aSDK.I
 	}
 
 	//step 9 构建buy指令
-	return tx.BuildBuyInstructionWithCreatorVault(
-		&swap_entity.BuyInstruction{
-			Amount:                  uint64(minOut),
-			MaxSolCost:              uint64(amountIn.IntPart()),
-			Global:                  pumpfun.GlobalPumpFunAddress,
-			FeeRecipient:            feeRecipient,
-			Mint:                    marketTx.OutMint,
-			BondingCurve:            bondingCurve.BondingCurve,
-			AssociatedBondingCurve:  bondingCurve.AssociatedBondingCurve,
-			AssociatedUser:          ataAccount,
-			User:                    marketTx.UserWalletAddress,
-			SystemProgram:           aSDK.SystemProgramID,
-			TokenProgram:            marketTx.OutTokenProgram,
-			EventAuthority:          pumpfun.PumpFunEventAuthority,
-			CreatorVault:            creatorVault.CreatorVault,
-			Program:                 aSDK.MustPublicKeyFromBase58(constant.PumpAddress),
-			GlobalVolumeAccumulator: globalVolumeAccumulator,
-			UserVolumeAccumulator:   userVolumeAccumulator,
-			FeeConfig:               feeConfig}), nil
+	return tx.BuildSellInstructionWithCreatorVault(
+		&swap_entity.SellInstruction{
+			Amount:                 uint64(amountIn.IntPart()),
+			MinSolOutput:           uint64(minOut),
+			Global:                 pumpfun.GlobalPumpFunAddress,
+			FeeRecipient:           feeRecipient,
+			Mint:                   marketTx.OutMint,
+			BondingCurve:           bondingCurve.BondingCurve,
+			AssociatedBondingCurve: bondingCurve.AssociatedBondingCurve,
+			AssociatedUser:         ataAccount,
+			User:                   marketTx.UserWalletAddress,
+			SystemProgram:          aSDK.SystemProgramID,
+			TokenProgram:           marketTx.OutTokenProgram,
+			EventAuthority:         pumpfun.PumpFunEventAuthority,
+			CreatorVault:           creatorVault.CreatorVault,
+			Program:                aSDK.MustPublicKeyFromBase58(constant.PumpAddress),
+			FeeConfig:              feeConfig}), nil
 }
 
 func (tx *TxManager) BuildSellInstructionWithCreatorVault(sellInstruction *swap_entity.SellInstruction) aSDK.Instruction {
@@ -564,6 +568,12 @@ func (tx *TxManager) BuildSellInstructionWithCreatorVault(sellInstruction *swap_
 		aSDK.Meta(pumpfun.PumpFeeProgramAddress),                  // #15 - Fee Program
 	}
 
+	bondingCurveV2, err := pumpfun.FindBondingCurveV2Address(sellInstruction.Mint)
+	if err != nil {
+		panic(fmt.Errorf("find bonding_curve_v2 address: %w", err))
+	}
+	accounts = append(accounts, aSDK.Meta(bondingCurveV2)) // #16 - Bonding Curve V2
+
 	// Create instruction data
 	data := make([]byte, 16) // 8 bytes discriminator + 8 bytes amount
 
@@ -571,12 +581,12 @@ func (tx *TxManager) BuildSellInstructionWithCreatorVault(sellInstruction *swap_
 	copy(data[0:8], []byte{51, 230, 133, 164, 1, 127, 131, 173})
 
 	// Add amount parameter (u64, little endian)
-	binary.LittleEndian.PutUint64(data[8:16], *sellInstruction.Amount)
+	binary.LittleEndian.PutUint64(data[8:16], sellInstruction.Amount)
 
 	// Add MinSolOutput parameter (u64, little endian)
 
 	data = append(data, make([]byte, 8)...) // Extend data slice to accommodate maxSolCost
-	binary.LittleEndian.PutUint64(data[16:24], *sellInstruction.MinSolOutput)
+	binary.LittleEndian.PutUint64(data[16:24], sellInstruction.MinSolOutput)
 
 	return aSDK.NewInstruction(
 		sellInstruction.Program,

@@ -15,7 +15,7 @@ type TradeWithPair struct {
 	BaseTokenPriceUSD            float64 `json:"base_token_price_usd"`              // 基础代币美元价格
 	TotalUSD                     float64 `json:"total_usd"`                         // 美元计价总数
 	TokenPriceUSD                float64 `json:"token_price_usd"`                   // 另一个代币美元价格
-	To                           string  `json:"to"`                                // 代币接收方地址
+	To                           string  `json:"to"`                                // token接收方地址
 	BlockNum                     int64   `json:"block_num"`                         // 区块高度
 	BlockTime                    int64   `json:"block_time"`                        // 区块出块事件
 	TransactionIndex             int     `json:"transaction_index"`                 // 交易在交易列表中的索引

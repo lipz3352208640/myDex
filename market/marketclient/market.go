@@ -17,6 +17,7 @@ type (
 	BaseTokenPriceRequest  = market.BaseTokenPriceRequest
 	BaseTokenPriceResponse = market.BaseTokenPriceResponse
 	PairInfo               = market.PairInfo
+	PairInfoReq            = market.PairInfoReq
 	PairInfoRequest        = market.PairInfoRequest
 	Request                = market.Request
 	Response               = market.Response
@@ -31,6 +32,7 @@ type (
 		FindNearTokenPrice(ctx context.Context, in *TokenPriceRequest, opts ...grpc.CallOption) (*TokenPriceResponse, error)
 		FindNearBaseTokenPrice(ctx context.Context, in *BaseTokenPriceRequest, opts ...grpc.CallOption) (*BaseTokenPriceResponse, error)
 		FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error)
+		FindPairInfoByPairAddress(ctx context.Context, in *PairInfoReq, opts ...grpc.CallOption) (*PairInfo, error)
 	}
 
 	defaultMarket struct {
@@ -67,4 +69,9 @@ func (m *defaultMarket) FindNearBaseTokenPrice(ctx context.Context, in *BaseToke
 func (m *defaultMarket) FindTokenInfo(ctx context.Context, in *TokenInfoRequest, opts ...grpc.CallOption) (*TokenInfoResponse, error) {
 	client := market.NewMarketClient(m.cli.Conn())
 	return client.FindTokenInfo(ctx, in, opts...)
+}
+
+func (m *defaultMarket) FindPairInfoByPairAddress(ctx context.Context, in *PairInfoReq, opts ...grpc.CallOption) (*PairInfo, error) {
+	client := market.NewMarketClient(m.cli.Conn())
+	return client.FindPairInfoByPairAddress(ctx, in, opts...)
 }

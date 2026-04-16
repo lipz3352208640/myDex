@@ -23,12 +23,19 @@ type (
 		WithSession(tx *gorm.DB) TradeOrderModel
 		InsertWithLog(ctx context.Context, data *TradeOrder) error
 		UpdateOrder(ctx context.Context, order *TradeOrder, updateField []string) error
+		FindOnChainOrderByChainId(ctx context.Context, chainId int64, limit int, offset int) ([]*TradeOrder, error)
 	}
 
 	customTradeOrderModel struct {
 		*defaultTradeOrderModel
 	}
 )
+
+func (c customTradeOrderModel) FindOnChainOrderByChainId(ctx context.Context, chainId int64, limit int, offset int) ([]*TradeOrder, error) {
+	var tradeOrders []*TradeOrder
+	err := c.conn.WithContext(ctx).Model(&TradeOrder{}).Where("chain_id = ? and status = ?", chainId, 3).Limit(limit).Offset(offset).Order("id asc").Find(&tradeOrders).Error
+	return tradeOrders, err
+}
 
 func (c customTradeOrderModel) InsertWithLog(ctx context.Context, data *TradeOrder) error {
 	return c.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

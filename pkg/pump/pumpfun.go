@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"math/big"
 	"myDex/pkg/constant"
+	pumpidl "myDex/pkg/pump/generate"
 	token2022 "myDex/pkg/token2022"
+	"strings"
 	"time"
 
 	bin "github.com/gagliardetto/binary"
@@ -49,6 +51,17 @@ type BondingCurveData struct {
 	TokenTotalSupply     *big.Int
 	Complete             bool
 	Creator              solana.PublicKey
+	IsMayhemMode         bool
+}
+
+type UserVolumeAccumulatorData struct {
+	User                  solana.PublicKey
+	NeedsClaim            bool
+	TotalUnclaimedTokens  uint64
+	TotalClaimedTokens    uint64
+	CurrentSolVolume      uint64
+	LastUpdateTimestamp   int64
+	HasTotalClaimedTokens bool
 }
 
 type PumpFun struct {
@@ -81,47 +94,6 @@ func (obj *globalAccountMinimal) UnmarshalWithDecoder(decoder *bin.Decoder) (err
 	return decoder.Decode(&obj.FeeRecipient)
 }
 
-type bondingCurveAccount struct {
-	VirtualTokenReserves uint64
-	VirtualSolReserves   uint64
-	RealTokenReserves    uint64
-	RealSolReserves      uint64
-	TokenTotalSupply     uint64
-	Complete             bool
-	Creator              solana.PublicKey
-}
-
-var bondingCurveAccountDiscriminator = [8]byte{23, 183, 248, 55, 96, 216, 172, 96}
-
-func (obj *bondingCurveAccount) UnmarshalWithDecoder(decoder *bin.Decoder) (err error) {
-	discriminator, err := decoder.ReadTypeID()
-	if err != nil {
-		return err
-	}
-	if !discriminator.Equal(bondingCurveAccountDiscriminator[:]) {
-		return fmt.Errorf("wrong discriminator: wanted %v, got %v", bondingCurveAccountDiscriminator, discriminator)
-	}
-	if err = decoder.Decode(&obj.VirtualTokenReserves); err != nil {
-		return err
-	}
-	if err = decoder.Decode(&obj.VirtualSolReserves); err != nil {
-		return err
-	}
-	if err = decoder.Decode(&obj.RealTokenReserves); err != nil {
-		return err
-	}
-	if err = decoder.Decode(&obj.RealSolReserves); err != nil {
-		return err
-	}
-	if err = decoder.Decode(&obj.TokenTotalSupply); err != nil {
-		return err
-	}
-	if err = decoder.Decode(&obj.Complete); err != nil {
-		return err
-	}
-	return decoder.Decode(&obj.Creator)
-}
-
 func FetchBondingCurve(rpcClient *rpc.Client, bondingCurvePubKey solana.PublicKey) (*BondingCurveData, error) {
 
 	fmt.Println("bondingCurvePDA:", bondingCurvePubKey.String())
@@ -136,13 +108,13 @@ func FetchBondingCurve(rpcClient *rpc.Client, bondingCurvePubKey solana.PublicKe
 
 	data := resp.Value.Data.GetBinary()
 	decoder := bin.NewBorshDecoder(data)
-	var account bondingCurveAccount
+	var account pumpidl.BondingCurveAccount
 	if err := account.UnmarshalWithDecoder(decoder); err != nil {
 		return nil, fmt.Errorf("FBCD: decode bonding curve failed: %w", err)
 	}
 
-	logx.Infof("Fetched bonding curve data: {virtualTokenReserves: %d, virtualSolReserves: %d, realTokenReserves: %d, realSolReserves: %d, complete: %v}",
-		account.VirtualTokenReserves, account.VirtualSolReserves, account.RealTokenReserves, account.RealSolReserves, account.Complete)
+	logx.Infof("Fetched bonding curve data: {virtualTokenReserves: %d, virtualSolReserves: %d, realTokenReserves: %d, realSolReserves: %d, complete: %v, isMayhemMode: %v}",
+		account.VirtualTokenReserves, account.VirtualSolReserves, account.RealTokenReserves, account.RealSolReserves, account.Complete, account.IsMayhemMode)
 
 	return &BondingCurveData{
 		RealTokenReserves:    new(big.Int).SetUint64(account.RealTokenReserves),
@@ -152,6 +124,7 @@ func FetchBondingCurve(rpcClient *rpc.Client, bondingCurvePubKey solana.PublicKe
 		TokenTotalSupply:     new(big.Int).SetUint64(account.TokenTotalSupply),
 		Complete:             account.Complete,
 		Creator:              solana.PublicKey(account.Creator),
+		IsMayhemMode:         account.IsMayhemMode,
 	}, nil
 }
 
@@ -192,6 +165,17 @@ func GetBondingCurveAndAssociatedBondingCurve(mint solana.PublicKey, tokenProgra
 	}, nil
 }
 
+func FindBondingCurveV2Address(mint solana.PublicKey) (pda solana.PublicKey, err error) {
+	pda, _, err = solana.FindProgramAddress(
+		[][]byte{[]byte("bonding-curve-v2"), mint.Bytes()},
+		solana.MustPublicKeyFromBase58(constant.PumpAddress),
+	)
+	if err != nil {
+		return solana.PublicKey{}, fmt.Errorf("derive bonding_curve_v2 PDA: %w", err)
+	}
+	return pda, nil
+}
+
 // bondingCurve 账户
 // VirtualTokenReserves uint64
 // VirtualSolReserves   uint64
@@ -214,7 +198,7 @@ func CreateCreatorVault(rpcClient *rpc.Client, bondingCurve solana.PublicKey) (*
 
 	data := resp.Value.Data.GetBinary()
 	decoder := bin.NewBorshDecoder(data)
-	var account bondingCurveAccount
+	var account pumpidl.BondingCurveAccount
 	if err := account.UnmarshalWithDecoder(decoder); err != nil {
 		return nil, fmt.Errorf("FBCD: decode bonding curve for creator vault failed: %w", err)
 	}
@@ -282,6 +266,38 @@ func FindUserVolumeAccumulatorAddress(user solana.PublicKey) (pda solana.PublicK
 	return pda, nil
 }
 
+func FetchUserVolumeAccumulator(rpcClient *rpc.Client, userVolumeAccumulator solana.PublicKey) (*UserVolumeAccumulatorData, error) {
+	acct, err := rpcClient.GetAccountInfoWithOpts(context.TODO(), userVolumeAccumulator, &rpc.GetAccountInfoOpts{
+		Encoding:   solana.EncodingBase64,
+		Commitment: rpc.CommitmentProcessed,
+	})
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fetch user_volume_accumulator: %w", err)
+	}
+	if acct.Value == nil || acct.Value.Data == nil {
+		return nil, nil
+	}
+
+	decoder := bin.NewBorshDecoder(acct.Value.Data.GetBinary())
+	var account pumpidl.UserVolumeAccumulatorAccount
+	if err := account.UnmarshalWithDecoder(decoder); err != nil {
+		return nil, fmt.Errorf("decode user_volume_accumulator: %w", err)
+	}
+
+	return &UserVolumeAccumulatorData{
+		User:                  solana.PublicKey(account.User),
+		NeedsClaim:            account.NeedsClaim,
+		TotalUnclaimedTokens:  account.TotalUnclaimedTokens,
+		TotalClaimedTokens:    account.TotalClaimedTokens,
+		CurrentSolVolume:      account.CurrentSolVolume,
+		LastUpdateTimestamp:   account.LastUpdateTimestamp,
+		HasTotalClaimedTokens: account.HasTotalClaimedTokens,
+	}, nil
+}
+
 func FindFeeConfigAddress() (pda solana.PublicKey, err error) {
 
 	feeConfigSeedTag := []byte("fee_config")
@@ -290,7 +306,7 @@ func FindFeeConfigAddress() (pda solana.PublicKey, err error) {
 	var seeds [][]byte
 	// const: fee_config
 	seeds = append(seeds, feeConfigSeedTag)
-	// const (raw): [1 86 224 246 147 102 90 207 68 219 21 104 191 23 91 170 81 137 203 151 245 210 255 59 101 93 43 182 253 109 24 176]
+	// const (raw): [1, 86, 224, 246, 147, 102, 90, 207, 68, 219,
 	seeds = append(seeds, feeConfigSeedKey)
 
 	pda, _, err = solana.FindProgramAddress(seeds, PumpFeeProgramAddress)

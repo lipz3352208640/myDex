@@ -45,3 +45,21 @@ type MarketTxExt struct {
 	InTokenProgram    aSDK.PublicKey
 	OutTokenProgram   aSDK.PublicKey
 }
+
+type TokenSwapPoolConfig struct {
+	RPCURL          string `json:"rpcUrl"`
+	Payer           string `json:"payer"`
+	UsdcMint        string `json:"usdcMint"`
+	UsdcSource      string `json:"usdcSource"`
+	SwapAccount     string `json:"swapAccount"`
+	SwapAuthority   string `json:"swapAuthority"`
+	WsolVault       string `json:"wsolVault"`
+	UsdcVault       string `json:"usdcVault"`
+	PoolMint        string `json:"poolMint"`
+	PoolFeeAccount  string `json:"poolFeeAccount"`
+	PoolDestination string `json:"poolDestination"`
+	SolLamports     uint64 `json:"solLamports"`
+	UsdcAmount      uint64 `json:"usdcAmount"`
+	UsdcDecimals    uint8  `json:"usdcDecimals"`
+	PoolDecimals    uint8  `json:"poolDecimals"`
+}

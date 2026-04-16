@@ -183,9 +183,9 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 
 	// 设置rpc调用最多15s超时时间
 	//step 2: get latest blockhash
-	timeoutCtx, cancel := context.WithTimeout(context.TODO(), 15*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-
+	
 	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
 	if err != nil {
 		return "", fmt.Errorf("failed to get latest blockhash: %w", err)
@@ -197,7 +197,7 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	if err != nil {
 		return "", err
 	}
-
+	tm.Infof("build BuyInstruction !")
 	tx, err := aSDK.NewTransaction(instructions, resp.Value.Blockhash, aSDK.TransactionPayer(feePayer))
 	if err != nil {
 		return "", err
@@ -269,7 +269,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 
 	// Return the signature of the first signer as a string
 	if tm.SimulateOnly {
-		timeoutCtx, cancel := context.WithTimeout(context.TODO(), 15*time.Second)
+		timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 		err = tm.simulate(timeoutCtx, &unsignedTx)
 		if err != nil {
@@ -288,6 +288,9 @@ func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aS
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction: %v", err)
+	}
+	if sig.IsZero() {
+		return "", fmt.Errorf("send transaction returned empty signature")
 	}
 	return sig.String(), nil
 }

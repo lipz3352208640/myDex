@@ -34,9 +34,15 @@ func NewTokenPriceLimit(svc *svc.ServiceContext) *TokenPriceLimit {
 }
 
 func (s *TokenPriceLimit) Consume(lowerSequence, upperSequence int64, buffer []*entity.OrderMessage) {
+	s.Infof("disruptor consume: lower=%d upper=%d", lowerSequence, upperSequence)
 	err := s.Svc.Pool.Submit(func() {
-		for i := lowerSequence; i < upperSequence; i++ {
+		for i := lowerSequence; i <= upperSequence; i++ {
+
 			message := buffer[i%int64(len(buffer))]
+			if message == nil {
+				s.Errorf("disruptor consume nil message at sequence=%d", i)
+				continue
+			}
 			s.DoConsume(message)
 		}
 	})
@@ -56,13 +62,6 @@ func (s *TokenPriceLimit) DoConsume(message *entity.OrderMessage) {
 }
 
 func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.OrderMessage) {
-
-	message = &entity.OrderMessage{
-		TokenCA:      "F7vR621r98H5ppuUH1VCeErLpZSPMznmQfFkssCDpump",
-		CurrentPrice: "0.00000002839225720665543",
-		SwapType:     1,
-		ChainId:      100000,
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -71,6 +70,7 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 		s.Errorf("build redis key failed: %v", err)
 		return
 	}
+	s.Infof("processing token price limit orders, key=%s", key)
 
 	lockKey := key + ":lock"
 	lockValue := fmt.Sprintf("%s:%d:%s", message.TokenCA, message.ChainId, message.CurrentPrice)
@@ -91,6 +91,7 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 		return
 	}
 
+	s.Infof("currentPrice=%s", currentPrice.String())
 	orderStrs, err := s.Svc.Redis.LrangeCtx(ctx, key, 0, -1)
 	if err != nil {
 		s.Errorf("load limit orders from redis failed, key=%s err=%v", key, err)
@@ -103,6 +104,7 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 	orders := make([]*entity.RedisTokenPriceLimitOrderInfo, 0, len(orderStrs))
 	triggered := make([]*entity.RedisTokenPriceLimitOrderInfo, 0)
 
+	s.Infof("currentPrice=%s orderStrs=%v", currentPrice.String(), orderStrs)
 	for _, orderStr := range orderStrs {
 		info, err := String2Struct[*entity.RedisTokenPriceLimitOrderInfo](orderStr)
 		if err != nil {
@@ -172,6 +174,7 @@ func String2Struct[T any](data string) (T, error) {
 }
 
 func buildLimitOrderRedisKey(message *entity.OrderMessage) (string, error) {
+	message.SwapType = 2
 	switch trade.SwapType(message.SwapType) {
 	case trade.SwapType_Buy:
 		return fmt.Sprintf("%v:%v:%v", tradepkg.RedisLimitOrderBuyPrefix, message.TokenCA, message.ChainId), nil
@@ -191,6 +194,7 @@ func decodeRedisLimitOrder(raw string) (*entity.RedisTokenPriceLimitOrderInfo, e
 }
 
 func shouldTriggerLimitOrder(swapType trade.SwapType, limitPrice, currentPrice decimal.Decimal) bool {
+	fmt.Sprintf("swapType=%v limitPrice=%s currentPrice=%s", swapType, limitPrice.String(), currentPrice.String())
 	switch swapType {
 	case trade.SwapType_Buy:
 		return limitPrice.GreaterThanOrEqual(currentPrice)

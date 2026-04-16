@@ -24,7 +24,10 @@ var ProgramRaydiumConcentratedLiquidity = common.PublicKeyFromString("CAMMCzo5YL
 var ProgramMeteoraDLMM = common.PublicKeyFromString("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo")
 var ProgramPhoneNix = common.PublicKeyFromString("PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY")
 
-var StableCoinSwapDexes = []common.PublicKey{ProgramOrca, ProgramRaydiumConcentratedLiquidity, ProgramMeteoraDLMM, ProgramPhoneNix}
+// /test
+var ProgramSwap = common.PublicKeyFromString("SwaPpA9LAaLfeLi3a68M4DjnLqgtticKg6CnyNwgAC8")
+
+var StableCoinSwapDexes = []common.PublicKey{ProgramOrca, ProgramRaydiumConcentratedLiquidity, ProgramMeteoraDLMM, ProgramPhoneNix, ProgramSwap}
 
 func GetSolPrice(block *client.Block, dbBlock *solmodel.Block, b *BlockService) (map[string]*entity.TokenAccount, float64) {
 	var prices []float64
@@ -83,6 +86,7 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 			var allTransfer []*token.TransferParam
 
 			lo.ForEach(innerInstMap[index].Instructions, func(inst types.CompiledInstruction, innerIndex int) {
+
 				transfer, err := getTransfer(accountKeys, inst)
 				if err != nil || transfer == nil {
 					return
@@ -134,6 +138,7 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 				var allTransfer []*token.TransferParam
 
 				lo.ForEach(innerInsruction.Instructions, func(inst types.CompiledInstruction, innerIndex int) {
+
 					transfer, err := getTransfer(accountKeys, inst)
 					if err != nil || transfer == nil {
 						return

@@ -28,6 +28,7 @@ type ServiceContext struct {
 	BlockModel   solmodel.BlockModel
 	TokenModel   solmodel.TokenModel
 	PairModel    solmodel.PairModel
+	TradeModel   solmodel.TradeModel
 	TradeService tradeclient.Trade
 }
 
@@ -84,6 +85,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		BlockModel:   solmodel.NewBlockModel(db),
 		TokenModel:   solmodel.NewTokenModel(db),
 		PairModel:    solmodel.NewPairModel(db),
+		TradeModel:   solmodel.NewTradeModel(db),
 		TradeService: tradeClient,
 	}
 }

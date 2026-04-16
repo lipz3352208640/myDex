@@ -93,7 +93,7 @@ func (b *BlockService) Stop() {
 
 func (b *BlockService) handleTransacton(slot uint64, workID int) {
 
-	slot = 348707344
+	slot = 455965277
 	if slot == 0 {
 		return
 	}
@@ -206,7 +206,7 @@ func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {
 
 func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDecodeEntity, workID int) []*entity.TradeWithPair {
 	var trades []*entity.TradeWithPair
-	for _, transcation := range block.Transactions {
+	for index, transcation := range block.Transactions {
 		select {
 		case <-b.ctx.Done():
 			return nil
@@ -228,6 +228,7 @@ func (b *BlockService) parseTxInstruction(block *client.Block, tx *entity.TxDeco
 		tx.Signature = base58.Encode(transcation.Transaction.Signatures[0])
 		tx.TranscationMeta = transcation.Meta
 		tx.PumpEventIndex = 0
+		tx.HashId = index
 
 		if len(instructions) > 0 {
 			accountKeys := transcation.AccountKeys

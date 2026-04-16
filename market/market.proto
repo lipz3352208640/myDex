@@ -78,6 +78,11 @@ message TokenInfoResponse {
 }
 
 
+message PairInfoReq {
+  int64 chain_id = 1;  // Chain ID
+  string pair_addr = 2;
+}
+
 
 service Market {
   rpc Ping(Request) returns(Response);
@@ -85,4 +90,5 @@ service Market {
   rpc FindNearTokenPrice(TokenPriceRequest) returns(TokenPriceResponse);
   rpc FindNearBaseTokenPrice(BaseTokenPriceRequest) returns(BaseTokenPriceResponse);
   rpc FindTokenInfo(TokenInfoRequest) returns(TokenInfoResponse);
+  rpc FindPairInfoByPairAddress(PairInfoReq) returns(PairInfo);
 }
