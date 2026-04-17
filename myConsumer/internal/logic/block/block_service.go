@@ -92,8 +92,6 @@ func (b *BlockService) Stop() {
 }
 
 func (b *BlockService) handleTransacton(slot uint64, workID int) {
-
-	slot = 455965277
 	if slot == 0 {
 		return
 	}

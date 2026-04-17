@@ -176,7 +176,7 @@ func (t *TradeServiceImpl) SaveTrade(ctx context.Context, trade *entity.TradeWit
 
 func (t *TradeServiceImpl) sendTokenPrice2Trade(ctx context.Context, tradeWithPair *entity.TradeWithPair) {
 
-	if tradeWithPair.Type != enum.TradeTypeBuy.String() && tradeWithPair.Type != enum.TradeTypeSell.String() {
+	if !strings.EqualFold(strings.ToLower(tradeWithPair.Type), enum.TradeTypeBuy.String()) && !strings.EqualFold(strings.ToLower(tradeWithPair.Type), enum.TradeTypeSell.String()) {
 		t.Infof("sendTokenPrice2Trade tradeWithPair type in not buy or sell,tx hash: %v", tradeWithPair.TxHash)
 		return
 	}
@@ -187,10 +187,14 @@ func (t *TradeServiceImpl) sendTokenPrice2Trade(ctx context.Context, tradeWithPa
 
 	token2BasePrice := decimal.NewFromFloat(tradeWithPair.TokenPriceUSD).Div(decimal.NewFromFloat(tradeWithPair.BaseTokenPriceUSD)).String()
 
+	SwapType := trade.SwapType_Buy
+	if strings.EqualFold(strings.ToLower(tradeWithPair.Type), enum.TradeTypeSell.String()) {
+		SwapType = trade.SwapType_Sell
+	}
 	_, err := t.sc.TradeService.ProcTokenPrice(ctx, &tradeclient.ProcTokenPriceRequest{
 		TokenCa:  tradeWithPair.PairInfo.TokenAddr,
 		Price:    token2BasePrice,
-		SwapType: trade.SwapType_Buy,
+		SwapType: SwapType,
 		ChainId:  constant.SolChainIdInt,
 	})
 	if err != nil {

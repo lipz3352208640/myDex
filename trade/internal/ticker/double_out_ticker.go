@@ -115,32 +115,36 @@ func (t *DoubleOutTicker) ExecuteDoubleOut() {
 		tradeOrderData, err := t.svcCtx.TradeOrderModel.FindOnChainOrderByChainId(t.ctx, int64(constant.SolChainIdInt), 10, offset)
 		if err != nil {
 			t.Error("failed to find on-chain orders", err)
-			return
+			offset += 10
+			continue
 		}
 
 		if len(tradeOrderData) == 0 {
 			t.Info("no on-chain orders found")
-			return
+			break
 		}
 
 		//step 2: get on-chain tx status and update order status
 		queryItem := lo.Map(tradeOrderData, func(tradeOrder *solmodel.TradeOrder, index int) *solmodel.Trade {
 			return &solmodel.Trade{
-				TxHash:    tradeOrder.TxHash,
+				TxHash: tradeOrder.TxHash,
+				// Query with a slightly earlier lower bound to avoid missing
+				// trade rows whose created_at is earlier than the order row.
 				CreatedAt: tradeOrder.CreatedAt,
 			}
 		})
-
 		tradeModel := solmodel.NewTradeModel(t.svcCtx.DB)
 		tradeData, err := tradeModel.FindByTxHashAndCreateTimes(t.ctx, queryItem)
 		if err != nil {
 			t.Error("failed to query trades by tx hash and create time", err)
-			return
+			offset += 10
+			continue
 		}
 
 		if len(tradeData) == 0 {
 			t.Info("no matched trades found")
-			return
+			offset += 10
+			continue
 		}
 
 		tradeMap := lo.SliceToMap(tradeData, func(item *solmodel.Trade) (string, *solmodel.Trade) {
@@ -173,22 +177,24 @@ func (t *DoubleOutTicker) ExecuteDoubleOut() {
 			order.FinalBasePrice = feeInfo.FinalBasePrice
 
 			ctx, cancle := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancle()
 			pair, err := t.svcCtx.Marketclient.FindPairInfoByPairAddress(ctx, &market.PairInfoReq{
 				PairAddr: dbTrade.PairAddr,
 				ChainId:  int64(constant.SolChainIdInt),
 			})
+			cancle()
 			ctx, cancle = context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancle()
 			if err != nil {
 				pair, err = t.svcCtx.Marketclient.FindMaxSupplyPairInfoByTokenAddrAndChainID(ctx, &market.PairInfoRequest{
-					TokenAddr: pair.TokenAddress,
+					TokenAddr: order.TokenCa,
 					ChainId:   int64(constant.SolChainIdInt),
 				})
+				cancle()
 				if err != nil {
 					t.Errorf("failed to get pair info, orderId=%d txHash=%s pairAddr=%s err=%v", order.Id, order.TxHash, dbTrade.PairAddr, err)
 					continue
 				}
+			} else {
+				cancle()
 			}
 			order.OrderCap = decimal.NewFromFloat32(float32(pair.Fdv))
 
@@ -196,12 +202,12 @@ func (t *DoubleOutTicker) ExecuteDoubleOut() {
 				order.Id, order.TxHash, dbTrade.Id, feeInfo.GasFee, feeInfo.PriorityFee, feeInfo.DexFee, feeInfo.ServerFee, feeInfo.JitoFee)
 
 			ctx, cancle = context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancle()
 			if err = t.svcCtx.TradeOrderModel.Update(ctx, order); err == nil {
 				if isSuccess := t.processDoubleOut(order); isSuccess {
 					fmt.Println("double out success")
 				}
 			}
+			cancle()
 
 		}
 		offset += 10

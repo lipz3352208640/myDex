@@ -54,6 +54,7 @@ func (l *ProcTokenPriceLogic) ProcTokenPrice(in *trade.ProcTokenPriceRequest) (*
 		return nil, fmt.Errorf("invalid price format: %v", err)
 	}
 
+	
 	message := &entity.OrderMessage{
 		TokenCA:      in.TokenCa,
 		CurrentPrice: in.Price,

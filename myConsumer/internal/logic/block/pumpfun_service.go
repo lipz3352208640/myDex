@@ -171,6 +171,7 @@ func (p *PumpFunService) DecodePumpTranscation(txDecode *entity.TxDecodeEntity) 
 		} else {
 			tradeType = enum.TradeTypeSell.String()
 		}
+		fmt.Println("trade type is: ", tradeType)
 
 		trade := &entity.TradeWithPair{
 			ChainId:                      constant.SolChainId,

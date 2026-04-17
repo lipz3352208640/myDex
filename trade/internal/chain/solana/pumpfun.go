@@ -147,7 +147,7 @@ func (tx *TxManager) CreateMarketOrderPumpfun(ctx context.Context, marketTx *ent
 	//step 2: Associated Token Program: CreateIdempotent。创建mint 对应的ata账户，判断mint是否是sol
 	var swapDirection int
 	if marketTx.InMint == aSDK.WrappedSol || marketTx.OutMint == aSDK.WrappedSol {
-		swapDirection = int(trade.SwapType_Buy)
+		swapDirection = int(marketTx.SwapType)
 		tokenMint := marketTx.OutMint
 		tokenProgram := marketTx.OutTokenProgram
 		if swapDirection == int(trade.SwapType_Sell) {

@@ -304,20 +304,25 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (string, error) {
 	chainId := marketTx.ChainId
 	if chainId == constant.SolChainIdInt {
+		l.Infof("createAndSendTx start, wallet=%s pair=%s swapType=%d amountIn=%s", marketTx.UserWalletAddress, marketTx.PairAddr, marketTx.SwapType, marketTx.AmountIn)
 		txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
 		if err != nil {
 			return "", fmt.Errorf("Failed to build unsigned transaction: %w", err)
 		}
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		l.Infof("BuildUnsignedTransaction done, txBase64Len=%d", len(txToString))
+		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		l.Infof("SignTransaction start")
 		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(timeoutCtx, txToString)
 		if err != nil {
 			l.Errorf("Failed to sign transaction: %v", err)
 			return "", fmt.Errorf("Failed to sign transaction: %w", err)
 		}
+		l.Infof("SignTransaction done")
 
-		timeoutCtx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		timeoutCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		l.Infof("SendWithSignTransaction start")
 		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
 		if err != nil {
 			l.Errorf("Failed to send transaction: %v", err)
@@ -326,6 +331,7 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 		if txHash == "" {
 			return "", fmt.Errorf("send transaction returned empty tx hash")
 		}
+		l.Infof("SendWithSignTransaction done, txHash=%s", txHash)
 		return txHash, nil
 	}
 	return "", fmt.Errorf("unsupported chain id: %d", chainId)

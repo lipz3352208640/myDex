@@ -139,6 +139,7 @@ func convertMarketTx(in *entity.MarketTx) (*entity.MarketTxExt, error) {
 
 // 模拟执行交易。检查交易是否成功，不会发送上链
 func (tm *TxManager) simulate(ctx context.Context, tx *aSDK.Transaction) error {
+	tm.Infof("simulate start")
 	simOut, err := tm.MainClient.SimulateTransactionWithOpts(ctx, tx, &ag_rpc.SimulateTransactionOpts{
 		Commitment: ag_rpc.CommitmentProcessed,
 	})
@@ -151,6 +152,7 @@ func (tm *TxManager) simulate(ctx context.Context, tx *aSDK.Transaction) error {
 		logc.Infof(ctx, "simOut failed , logs %s , err:%v", logs, simOut.Value.Err)
 		return errors.New(logs)
 	}
+	tm.Infof("simulate done")
 	return nil
 }
 
@@ -180,16 +182,18 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	default:
 		return "", fmt.Errorf("TradePoolName:%s not support", in.TradePoolName)
 	}
+	tm.Infof("BuildUnsignedTransaction instructions ready, count=%d tradePool=%s", len(instructions), in.TradePoolName)
 
 	// 设置rpc调用最多15s超时时间
 	//step 2: get latest blockhash
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	
+
 	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
 	if err != nil {
 		return "", fmt.Errorf("failed to get latest blockhash: %w", err)
 	}
+	tm.Infof("GetLatestBlockhash done, blockhash=%s", resp.Value.Blockhash.String())
 
 	// 创建未签名交易
 	//step 3: create unsigned transaction
@@ -197,7 +201,7 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	if err != nil {
 		return "", err
 	}
-	tm.Infof("build BuyInstruction !")
+	tm.Infof("NewTransaction start, feePayer=%s", feePayer.String())
 	tx, err := aSDK.NewTransaction(instructions, resp.Value.Blockhash, aSDK.TransactionPayer(feePayer))
 	if err != nil {
 		return "", err
@@ -215,6 +219,7 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 		logx.WithContext(ctx).Errorf("Failed to serialize transaction: %v", err)
 		return "", err
 	}
+	tm.Infof("BuildUnsignedTransaction done, signers=%d serializedBytes=%d", numSigners, len(txData))
 
 	// Return the serialized transaction as base64
 	return base64.StdEncoding.EncodeToString(txData), nil
@@ -222,11 +227,13 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 
 // SignTransaction signs an unsigned transaction (base64) using the service's private key and returns the signature
 func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Transaction, string, error) {
+	tm.Infof("SignTransaction decode start, txBase64Len=%d", len(tx))
 	//step 1: decode the base64 transaction
 	txData, err := base64.StdEncoding.DecodeString(tx)
 	if err != nil {
 		return aSDK.Transaction{}, "", fmt.Errorf("failed to decode transaction: %v", err)
 	}
+	tm.Infof("SignTransaction decode done, txBytes=%d", len(txData))
 
 	//step 2: unmarshal the transaction
 	var unsignedTx aSDK.Transaction
@@ -235,6 +242,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 	if err := decoder.Decode(&unsignedTx); err != nil {
 		return aSDK.Transaction{}, "", fmt.Errorf("failed to unmarshal transaction: %v", err)
 	}
+	tm.Infof("SignTransaction unmarshal done, requiredSigners=%d", unsignedTx.Message.Header.NumRequiredSignatures)
 
 	//step 3: sign the transaction using the service's private key
 	privateKey := os.Getenv("private_key")
@@ -258,6 +266,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 		logc.Error(ctx, err)
 		return aSDK.Transaction{}, "", fmt.Errorf("failed to marshal transaction message: %v", err)
 	}
+	tm.Infof("SignTransaction message marshaled, messageBytes=%d", len(messageContent))
 	signature := ed25519.Sign(ed25519PrivateKey, messageContent)
 
 	// Set signatures for all required signers (assuming single signer for now)
@@ -271,16 +280,19 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 	if tm.SimulateOnly {
 		timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
+		tm.Infof("SignTransaction simulate enabled")
 		err = tm.simulate(timeoutCtx, &unsignedTx)
 		if err != nil {
 			return aSDK.Transaction{}, "", err
 		}
 	}
+	tm.Infof("SignTransaction done")
 	return unsignedTx, unsignedTx.Signatures[0].String(), nil
 
 }
 
 func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aSDK.Transaction) (string, error) {
+	tm.Infof("SendWithSignTransaction start")
 
 	sig, err := tm.Client.SendTransactionWithOpts(ctx, &transcation, ag_rpc.TransactionOpts{
 		SkipPreflight:       false,
@@ -292,5 +304,6 @@ func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aS
 	if sig.IsZero() {
 		return "", fmt.Errorf("send transaction returned empty signature")
 	}
+	tm.Infof("SendWithSignTransaction done, signature=%s", sig.String())
 	return sig.String(), nil
 }

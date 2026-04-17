@@ -54,6 +54,9 @@ func (tx *TxManager) CalcMinAmountOutByPrice(price, amountIn decimal.Decimal,
 	//计算滑点
 	minOut := outAmt.Mul(AllBpDecimal.Sub(decimal.NewFromUint64(uint64(slippage))).Div(AllBpDecimal))
 
+	tx.Infof("CalcMinAmountOutByPrice: price=%s amountIn=%s subAmount=%s outAmount=%s minOut=%s indecimal=%d outdecimal=%d isBuy=%t",
+		price.String(), amountIn.String(), subAmtDecimal.String(), outAmt.String(), minOut.String(), indecimal, outdecimal, isBuy)
+
 	return outAmt.IntPart(), minOut.IntPart()
 }
 
@@ -464,10 +467,14 @@ func (tx *TxManager) CreateSellInstruction(marketTx *entity.MarketTxExt) (aSDK.I
 
 	//step 2 获取amount。计算最小输出金额
 	price, _ := decimal.NewFromString(marketTx.Price)
-	amountIn, _ := decimal.NewFromString(marketTx.AmountIn)
+	amountInRaw, _ := decimal.NewFromString(marketTx.AmountIn)
 	slippage := marketTx.Slippage
 	indecimal := marketTx.InDecimal
 	outdecimal := marketTx.OutDecimal
+	amountIn := amountInRaw.Mul(decimal.NewFromInt(Decimals2Value[indecimal]))
+	if amountIn.LessThanOrEqual(decimal.Zero) {
+		return nil, fmt.Errorf("sell amount is zero after scaling: amountIn=%s inDecimal=%d", marketTx.AmountIn, indecimal)
+	}
 	var isBuy bool = false
 	var minOut int64
 	if !price.IsZero() {
@@ -489,10 +496,19 @@ func (tx *TxManager) CreateSellInstruction(marketTx *entity.MarketTxExt) (aSDK.I
 	}
 
 	//step 3 获取ata账户
-	ataAccount, _, err := aSDK.FindAssociatedTokenAddress(marketTx.UserWalletAddress, marketTx.InMint)
-	if err != nil {
-		tx.Errorf("find associated token address err: %v", err)
-		return nil, err
+	var ataAccount solana.PublicKey
+	if marketTx.InTokenProgram == aSDK.TokenProgramID {
+		ataAccount, _, err = aSDK.FindAssociatedTokenAddress(marketTx.UserWalletAddress, marketTx.InMint)
+		if err != nil {
+			tx.Errorf("find associated token address err: %v", err)
+			return nil, err
+		}
+	} else {
+		ataAccount, _, err = token2022.FindAssociatedToken2022Address(marketTx.UserWalletAddress, marketTx.InMint)
+		if err != nil {
+			tx.Errorf("find associated token address err: %v", err)
+			return nil, err
+		}
 	}
 
 	//step 4 获取creator vault 相关账户
@@ -560,8 +576,8 @@ func (tx *TxManager) BuildSellInstructionWithCreatorVault(sellInstruction *swap_
 		aSDK.Meta(sellInstruction.AssociatedUser).WRITE(),         // #5 - Associated User (WRITABLE)
 		aSDK.Meta(sellInstruction.User).WRITE().SIGNER(),          // #6 - User (WRITABLE, SIGNER)
 		aSDK.Meta(sellInstruction.SystemProgram),                  // #7 - System Program
-		aSDK.Meta(sellInstruction.TokenProgram).WRITE(),           // #8 - Token Program (WRITABLE)
 		aSDK.Meta(sellInstruction.CreatorVault).WRITE(),           // #9 - Creator Vault (WRITABLE)
+		aSDK.Meta(sellInstruction.TokenProgram).WRITE(),           // #8 - Token Program (WRITABLE)
 		aSDK.Meta(sellInstruction.EventAuthority).WRITE(),         // #10 - Event Authority (WRITABLE)
 		aSDK.Meta(sellInstruction.Program),                        // #11 - Program
 		aSDK.Meta(sellInstruction.FeeConfig),                      // #14 - Fee Config

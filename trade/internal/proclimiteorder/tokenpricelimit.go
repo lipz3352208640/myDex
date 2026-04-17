@@ -107,6 +107,7 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 	s.Infof("currentPrice=%s orderStrs=%v", currentPrice.String(), orderStrs)
 	for _, orderStr := range orderStrs {
 		info, err := String2Struct[*entity.RedisTokenPriceLimitOrderInfo](orderStr)
+
 		if err != nil {
 			s.Errorf("decode limit order failed: %v", err)
 			continue
@@ -123,11 +124,11 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 			triggered = append(triggered, info)
 		}
 	}
-
+	fmt.Println("triggered:  \n", len(triggered))
 	if len(triggered) == 0 {
 		return
 	}
-
+	fmt.Println("11111")
 	remain := make([]*entity.RedisTokenPriceLimitOrderInfo, 0, len(orders)-len(triggered))
 	triggeredMap := make(map[int64]struct{}, len(triggered))
 	for _, info := range triggered {
@@ -138,7 +139,7 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 			remain = append(remain, info)
 		}
 	}
-
+	fmt.Println("21111")
 	for _, info := range triggered {
 		if err := s.executeLimitTokenPriceOrder(ctx, message, info.OrderId); err != nil {
 			s.Errorf("execute limit order failed, orderId=%d err=%v", info.OrderId, err)
@@ -174,7 +175,7 @@ func String2Struct[T any](data string) (T, error) {
 }
 
 func buildLimitOrderRedisKey(message *entity.OrderMessage) (string, error) {
-	message.SwapType = 2
+	//message.SwapType = 2
 	switch trade.SwapType(message.SwapType) {
 	case trade.SwapType_Buy:
 		return fmt.Sprintf("%v:%v:%v", tradepkg.RedisLimitOrderBuyPrefix, message.TokenCA, message.ChainId), nil
@@ -194,7 +195,7 @@ func decodeRedisLimitOrder(raw string) (*entity.RedisTokenPriceLimitOrderInfo, e
 }
 
 func shouldTriggerLimitOrder(swapType trade.SwapType, limitPrice, currentPrice decimal.Decimal) bool {
-	fmt.Sprintf("swapType=%v limitPrice=%s currentPrice=%s", swapType, limitPrice.String(), currentPrice.String())
+	fmt.Printf("swapType=%v limitPrice=%s currentPrice=%s\n", swapType, limitPrice.String(), currentPrice.String())
 	switch swapType {
 	case trade.SwapType_Buy:
 		return limitPrice.GreaterThanOrEqual(currentPrice)
@@ -222,7 +223,7 @@ func (s *TokenPriceLimit) executeLimitTokenPriceOrder(ctx context.Context, messa
 	if err != nil {
 		return err
 	}
-
+	fmt.Println("31111")
 	if order.Status != int64(enum.OrderStatus_Wait) {
 		return nil
 	}
@@ -239,6 +240,7 @@ func (s *TokenPriceLimit) executeLimitTokenPriceOrder(ctx context.Context, messa
 		return err
 	}
 
+	fmt.Printf("pairInfo=%+v marketReq=%+v \n", pairInfo, marketReq)
 	_, err = logic.NewCreateMarketOrderLogic(ctx, s.Svc).CreateMarketTx(order, pairInfo, marketReq)
 	if err != nil {
 		order.Status = int64(enum.OrderStatus_Fail)
