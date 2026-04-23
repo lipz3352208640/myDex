@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"myDex/pkg/constant"
 	"myDex/trade/internal/chain/solana/entity"
+	"myDex/trade/internal/chain/solana/pumpamm"
 
 	// "dex/pkg/raydium/clmm/idl/generated/amm_v3"
 	"encoding/base64"
@@ -66,6 +67,7 @@ type TxManager struct {
 	context      context.Context
 	SimulateOnly bool
 	logx.Logger
+	pumpFunAmm *pumpamm.PumpfunAmm
 }
 
 func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool) *TxManager {
@@ -76,6 +78,7 @@ func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simul
 		MainClient:   ag_rpc.New(mainRpcEndpoint),
 		SimulateOnly: simulateOnly,
 		Logger:       logx.WithContext(context.Background()).WithFields(logx.LogField{Key: "service", Value: "txManage"}),
+		pumpFunAmm:   pumpamm.NewPumpfunAmm(rpcEndpoint),
 	}
 
 	threading.GoSafe(func() {
@@ -130,7 +133,7 @@ func convertMarketTx(in *entity.MarketTx) (*entity.MarketTxExt, error) {
 		OutDecimal:        in.OutDecimal,
 		InMint:            inMint,
 		OutMint:           outMint,
-		PairAddr:          in.PairAddr,
+		PairAddr:          solana.MustPublicKeyFromBase58(in.PairAddr),
 		Price:             in.Price,
 		InTokenProgram:    inTokenProgram,
 		OutTokenProgram:   outTokenProgram,
@@ -171,6 +174,11 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	switch in.TradePoolName {
 	case constant.PumpFunName:
 		instructions, err = tm.CreateMarketOrderPumpfun(ctx, in)
+		if err != nil {
+			return "", err
+		}
+	case constant.PumpFunAmmName:
+		instructions, err = tm.pumpFunAmm.CreateMarketOrderPumpfunAmm(in)
 		if err != nil {
 			return "", err
 		}

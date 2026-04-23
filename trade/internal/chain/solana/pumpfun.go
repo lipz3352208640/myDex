@@ -53,11 +53,9 @@ type PumpFunInstruction interface {
 	CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error)
 }
 
-/*************  ✨ Windsurf Command ⭐  *************/
 // CreateGasByGasFee creates a transaction to set gas price by gas fee.
 // This function will create two instructions: one for setting compute unit price and one for setting compute unit limit.
 
-/*******  8494295a-ffb5-42a3-beb6-cea4e0e05b2f  *******/
 func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, walletAccount aSDK.PublicKey, cuLimit uint32, gasFeeInLamport uint64) ([]aSDK.Instruction, uint64, error) {
 	var instructionNew aSDK.Instruction
 	var instructions []aSDK.Instruction

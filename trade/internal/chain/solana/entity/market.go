@@ -40,7 +40,7 @@ type MarketTxExt struct {
 	OutDecimal        uint8
 	InMint            aSDK.PublicKey
 	OutMint           aSDK.PublicKey
-	PairAddr          string
+	PairAddr          aSDK.PublicKey
 	Price             string
 	InTokenProgram    aSDK.PublicKey
 	OutTokenProgram   aSDK.PublicKey

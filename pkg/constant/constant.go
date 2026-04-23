@@ -3,6 +3,8 @@ package constant
 const (
 	//pump_address：
 	PumpAddress = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"
+
+	PumpAmmAddress = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 	// pumpfun：buy 指令
 	PumpBuyInstruction uint64 = 0xeaebda01123d0666
 	// pumpfun：sell 指令
@@ -37,7 +39,8 @@ const (
 	InitSolTokenAmount = 0.015
 
 	//
-	PumpFunName = "PumpFun"
+	PumpFunName    = "PumpFun"
+	PumpFunAmmName = "PumpFun.Amm"
 )
 
 const (
