@@ -7,6 +7,23 @@ ListenOn: 0.0.0.0:8081
 
 simulate_only: true
 
+Jupiter:
+  quote_url: "http://127.0.0.1:8080/quote"
+  swap_instructions_url: "http://127.0.0.1:8080/swap-instructions"
+  jito_bundle_url: "https://frankfurt.mainnet.block-engine.jito.wtf/api/v1/bundles"
+  profit_threshold_lamports: 3000
+  tip_bps: 5000
+
+Arbitrage:
+  enabled: false
+  interval_ms: 200
+  start_mint: "So11111111111111111111111111111111111111112"
+  mid_mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  amount_lamports: 10000000
+  slippage_bps: 0
+  max_accounts: 20
+  jito_tip_recipient: "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY"
+
 Helius:
   NodeUrl:
     - "https://api.devnet.solana.com"

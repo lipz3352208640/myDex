@@ -7,6 +7,10 @@ import (
 	"myDex/model/solmodel"
 	"myDex/pkg/queue"
 	"myDex/trade/internal/chain/solana"
+	"myDex/trade/internal/chain/solana/arbitrage"
+	"myDex/trade/internal/chain/solana/arbrunner"
+	"myDex/trade/internal/chain/solana/jupiterarb"
+	"myDex/trade/internal/chain/solana/jupiterclient"
 	"myDex/trade/internal/config"
 	"myDex/trade/internal/entity"
 	"os"
@@ -30,6 +34,10 @@ type ServiceContext struct {
 	Redis            *redis.Redis
 	DisruptorWrapper *queue.DisruptorWrapper[*entity.OrderMessage]
 	TxMananger       *solana.TxManager
+	JupiterClient    *jupiterclient.Client
+	ArbDetector      *arbitrage.Detector
+	JupiterArb       *jupiterarb.Builder
+	ArbRunner        *arbrunner.Runner
 	//goroutine 协程池
 	Pool *ants.Pool
 }
@@ -84,6 +92,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	fmt.Println("rpc endpoint:", c.Helius.NodeUrl[0])
 
+	jupiterHTTPClient := jupiterclient.NewClient(
+		nil,
+		c.Jupiter.QuoteURL,
+		c.Jupiter.SwapInstructionsURL,
+	)
+
+	txManager := solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly)
+	arbDetector := arbitrage.NewDetector(jupiterHTTPClient, c.Jupiter.ProfitThresholdLamports, c.Jupiter.TipBps)
+	jupiterBuilder := jupiterarb.NewBuilder(jupiterHTTPClient)
+
 	return &ServiceContext{
 		Config:          c,
 		Marketclient:    marketClient,
@@ -91,6 +109,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		TradeOrderModel: solmodel.NewTradeOrderModel(db),
 		Redis:           redisService,
 		Pool:            pool,
-		TxMananger:      solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly),
+		TxMananger:      txManager,
+		JupiterClient:   jupiterHTTPClient,
+		ArbDetector:     arbDetector,
+		JupiterArb:      jupiterBuilder,
+		ArbRunner:       arbrunner.NewRunner(arbDetector, jupiterBuilder, txManager, c.Jupiter.JitoBundleURL),
 	}
 }

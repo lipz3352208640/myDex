@@ -39,6 +39,10 @@ func main() {
 		doubleOutTicker := ticker.NewDoubleOutTicker(ctx)
 		serviceGroup.Add(doubleOutTicker)
 	}
+	{
+		arbTicker := ticker.NewArbTicker(ctx)
+		serviceGroup.Add(arbTicker)
+	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		trade.RegisterTradeServer(grpcServer, server.NewTradeServer(ctx))
