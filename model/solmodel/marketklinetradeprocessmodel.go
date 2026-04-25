@@ -30,11 +30,11 @@ type (
 	}
 )
 
-func (c customMarketKlineTradeProcessModel) WithSession(tx *gorm.DB) MarketKlineTradeProcessModel {
+func (c *customMarketKlineTradeProcessModel) WithSession(tx *gorm.DB) MarketKlineTradeProcessModel {
 	newModel := *c.defaultMarketKlineTradeProcessModel
 	c.defaultMarketKlineTradeProcessModel = &newModel
 	c.conn = tx
-	return &c
+	return c
 }
 
 // NewMarketKlineTradeProcessModel returns a model for the database table.
@@ -56,7 +56,7 @@ func (m *customMarketKlineTradeProcessModel) InsertIgnore(ctx context.Context, d
 		return false, nil
 	}
 
-	//做
+	//做幂等插入，插入冲突说明，已经处理过了，直接跳过
 	res := m.conn.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "hash_id"}, {Name: "interval_val"}},
 		DoNothing: true,
