@@ -11,3 +11,17 @@ Mysql:
   Host: 47.86.103.241
   Port: 3306
   Dbname: fun_dex
+
+Kafka:
+  Brokers:
+    - "127.0.0.1:9092"
+  Group: "market-consumer"
+  Topic: "web3fun"
+  Username: ""
+  Password: ""
+  Offset: "last"
+  Consumers: 1
+  RebalanceStrategy: "range"
+  MaxProcessingTimeMs: 100
+  AutoCommitIntervalMs: 1000
+  SessionTimeoutMs: 10000

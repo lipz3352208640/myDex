@@ -2,10 +2,12 @@ package block
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/logic/entity"
+	"myDex/myConsumer/internal/logic/enum"
 	"myDex/myConsumer/internal/svc"
 	"myDex/pkg/constant"
 	"net"
@@ -179,6 +181,7 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		gp := threading.NewRoutineGroup()
 		gp.RunSafe(func() {
 			b.tradeService.SaveTrades(trades)
+			b.SendMessage(dbBlock, trades)
 		})
 		gp.Wait()
 	}
@@ -190,6 +193,39 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		return
 	}
 
+}
+
+func (b *BlockService) SendMessage(block *solmodel.Block, trades []*entity.TradeWithPair) {
+	//step 1 : filter trade
+	trades = lo.Filter(trades, func(trade *entity.TradeWithPair, _ int) bool {
+		if trade == nil {
+			return false
+		}
+		if trade.TxHash == "" {
+			return false
+		}
+		if trade.BaseTokenPriceUSD == 0 {
+			return false
+		}
+		if "" == trade.Type || (trade.Type != enum.TradeTypeBuy.String() && trade.Type != enum.TradeTypeSell.String()) {
+			return false
+		}
+		return true
+	})
+	if len(trades) == 0 {
+		return
+	}
+	data, err := json.Marshal(trades)
+	if err != nil {
+		logx.Errorf("json.Marshal err:%v", err)
+		return
+	}
+	err = b.sc.Kafka.SendMessage(b.sc.Config.Kafka.Topic, fmt.Sprintf("%s", block.Slot), data)
+	if err != nil {
+		b.Errorf("SendMessage err:%v", err)
+		return
+	}
+	fmt.Println("send kafka success")
 }
 
 func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {

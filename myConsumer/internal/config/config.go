@@ -1,13 +1,18 @@
 package config
 
-import "github.com/zeromicro/go-zero/zrpc"
+import (
+	"myDex/myConsumer/internal/mq"
+
+	"github.com/zeromicro/go-zero/zrpc"
+)
 
 type Config struct {
 	zrpc.RpcServerConf
-	Helius Entity       `json:"Helius,optional"`
-	Thread ThreadEntity `json:"thread"`
-	Mysql  MysqlConfig  `json:"mysql"`
-	Sol    SolEntity    `json:"sol"`
+	Helius       Entity             `json:"Helius,optional"`
+	Thread       ThreadEntity       `json:"thread"`
+	Mysql        MysqlConfig        `json:"mysql"`
+	Sol          SolEntity          `json:"sol"`
+	Kafka        mq.KqConf          `json:"kafka,optional"`
 	TradeService zrpc.RpcClientConf `json:"trade_service"`
 }
 

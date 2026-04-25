@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"myDex/market/internal/config"
+	"myDex/market/internal/mqs"
 	"myDex/market/internal/server"
 	"myDex/market/internal/svc"
 	"myDex/market/market"
@@ -25,6 +26,9 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 	ctx := svc.NewServiceContext(c)
 
+	group := service.NewServiceGroup()
+	defer group.Stop()
+
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		market.RegisterMarketServer(grpcServer, server.NewMarketServer(ctx))
 
@@ -32,8 +36,25 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	defer s.Stop()
+	group.Add(s)
+
+	if len(c.Kafka.Brokers) > 0 {
+		consumerCount := c.Kafka.Consumers
+		if consumerCount <= 0 {
+			consumerCount = 1
+		}
+
+		for i := 0; i < consumerCount; i++ {
+			consumer, err := mqs.NewKafkaTradeConsumer(c.Kafka, ctx, i)
+			if err != nil {
+				panic(err)
+			}
+			group.Add(consumer)
+		}
+		fmt.Printf("Kafka consumers enabled, topic=%s, group=%s, consumers=%d\n",
+			c.Kafka.Topic, c.Kafka.Group, consumerCount)
+	}
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
-	s.Start()
+	group.Start()
 }

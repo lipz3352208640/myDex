@@ -15,9 +15,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config         config.Config
-	PairInfoModel  solmodel.PairModel
-	TokenInfoModel solmodel.TokenModel
+	Config                       config.Config
+	DB                           *gorm.DB
+	PairInfoModel                solmodel.PairModel
+	TokenInfoModel               solmodel.TokenModel
+	MarketKlineModel             solmodel.MarketKlineModel
+	MarketKlineTradeProcessModel solmodel.MarketKlineTradeProcessModel
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -53,8 +56,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	return &ServiceContext{
-		Config:         c,
-		PairInfoModel:  solmodel.NewPairModel(db),
-		TokenInfoModel: solmodel.NewTokenModel(db),
+		Config:                       c,
+		DB:                           db,
+		PairInfoModel:                solmodel.NewPairModel(db),
+		TokenInfoModel:               solmodel.NewTokenModel(db),
+		MarketKlineModel:             solmodel.NewMarketKlineModel(db),
+		MarketKlineTradeProcessModel: solmodel.NewMarketKlineTradeProcessModel(db),
 	}
 }

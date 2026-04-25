@@ -12,6 +12,25 @@ Helius:
 Sol:
   StartBlock: 0
 
+Kafka:
+  Brokers:
+    - "127.0.0.1:9092"
+  Group: "myconsumer"
+  Username: ""
+  Password: ""
+  Topic: "trades-queue"
+  Offset: last
+
+KqSolTrades:
+  Name: web3fun-kafka
+  Brokers:
+    - 115.159.107.189:9093
+  Group: web3-dex-fix-2025
+  Topic: web3fun
+  Offset: last
+  Username: "alikafka_post-cn-zp54bjj8x004"
+  Password: "htIJB7fFfcXbNVnH8rWLD1m52gfkOQI1"  
+
 Thread:
   Count:
     Consumer: 1

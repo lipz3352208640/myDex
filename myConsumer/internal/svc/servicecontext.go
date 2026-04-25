@@ -5,6 +5,7 @@ import (
 	"log"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/config"
+	"myDex/myConsumer/internal/mq"
 	"myDex/trade/trade"
 	"myDex/trade/tradeclient"
 	"net"
@@ -30,6 +31,7 @@ type ServiceContext struct {
 	PairModel    solmodel.PairModel
 	TradeModel   solmodel.TradeModel
 	TradeService tradeclient.Trade
+	Kafka        *mq.KafkaProducer
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -79,6 +81,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	tradeClient := trade.NewTradeClient(zrpc.MustNewClient(c.TradeService).Conn())
 
+	var kafkaProducer *mq.KafkaProducer
+	if len(c.Kafka.Brokers) > 0 {
+		var err error
+		kafkaProducer, err = mq.NewKafka(c.Kafka)
+		if err != nil {
+			logx.Must(err)
+		}
+		mq.SetDefaultKafka(kafkaProducer)
+	}
+
 	return &ServiceContext{
 		Config:       c,
 		solClients:   solClients,
@@ -87,5 +99,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		PairModel:    solmodel.NewPairModel(db),
 		TradeModel:   solmodel.NewTradeModel(db),
 		TradeService: tradeClient,
+		Kafka:        kafkaProducer,
 	}
 }
