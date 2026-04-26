@@ -25,8 +25,10 @@ const (
 
 	//token mint
 	Wsol = "So11111111111111111111111111111111111111112"
-	//Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-	Usdc       = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+	Usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	Usdt = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
+
+	//Usdc       = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 	SolDecimal = 9
 	//token 虚拟流动量和真实流动量的差值
 	TokenReservesDiff = 279900000000000

@@ -97,7 +97,7 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 				if from != nil && to != nil {
 					if from.TokenMintAccountAddress == to.TokenMintAccountAddress {
 
-						if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc {
+						if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc || from.TokenMintAccountAddress == constant.Usdt {
 							allTransfer = append(allTransfer, transfer)
 							// fmt.Printf("sol price debug: signature=%s outerIndex=%d innerIndex=%d mint=%s amount=%d from=%s to=%s fromOwner=%s toOwner=%s\n",
 							// 	signature,
@@ -149,7 +149,7 @@ func GetSolPriceBySwap(innerInstMap map[int]*client.InnerInstruction,
 					if from != nil && to != nil {
 						if from.TokenMintAccountAddress == to.TokenMintAccountAddress {
 
-							if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc {
+							if from.TokenMintAccountAddress == constant.Wsol || from.TokenMintAccountAddress == constant.Usdc || from.TokenMintAccountAddress == constant.Usdt {
 								allTransfer = append(allTransfer, transfer)
 								// fmt.Printf("sol price debug: signature=%s outerIndex=%d innerIndex=%d mint=%s amount=%d from=%s to=%s fromOwner=%s toOwner=%s\n",
 								// 	signature,
@@ -299,7 +299,7 @@ func CalcPriceOnAllTransferBySwapGroup(allTransfer []*token.TransferParam,
 					usdgTokenAccount = fromTokenAccount
 					break
 				}
-			} else if fromTokenAccount.TokenMintAccountAddress == constant.Usdc {
+			} else if fromTokenAccount.TokenMintAccountAddress == constant.Usdc || fromTokenAccount.TokenMintAccountAddress == constant.Usdt {
 				if IsSwapTransfer(allTransfer[i], allTransfer[j], tokenAccountMap) {
 					usdcTotal += allTransfer[i].Amount
 					usdgTotal += allTransfer[j].Amount

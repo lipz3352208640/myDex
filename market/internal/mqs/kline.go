@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"time"
+
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 var klineIntervals = []int{1, 5, 15, 60, 240, 720, 1440}
@@ -269,7 +271,6 @@ func boolToCount(ok bool) int64 {
 	return 0
 }
 
-
 func hasMixedBuySell(trades []*TradeMessage) bool {
 	hasBuy := false
 	hasSell := false
@@ -318,11 +319,17 @@ func detectClampTrades(trades []*TradeMessage) {
 				last := pairTrades[lastIndex]
 				if last != nil && last.BlockNum == trade.BlockNum {
 					if makerTradeType[trade.Maker] >= (1<<0 | 1<<1) {
+						txHashes := make([]string, 0, i-lastIndex+1)
 						for j := lastIndex; j <= i; j++ {
 							if pairTrades[j] != nil && pairTrades[j].PairAddr == trade.PairAddr && pairTrades[j].Maker == trade.Maker && pairTrades[j].BlockNum == trade.BlockNum {
 								pairTrades[j].Clamp = true
+								if pairTrades[j].TxHash != "" {
+									txHashes = append(txHashes, pairTrades[j].TxHash)
+								}
 							}
 						}
+						logx.Infof("detect clamp trades, pair=%s maker=%s block_num=%d tx_hashes=%v",
+							trade.PairAddr, trade.Maker, trade.BlockNum, txHashes)
 					}
 				} else {
 					makerFirstTrade[trade.Maker] = i

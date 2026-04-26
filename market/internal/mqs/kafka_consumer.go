@@ -126,6 +126,7 @@ func (h *tradeMessageHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 }
 
 func (h *tradeMessageHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	logx.Infof("consume claim: topic=%s partition=%d", claim.Topic(), claim.Partition())
 	for message := range claim.Messages() {
 		if err := h.handleMessage(message); err != nil {
 			logx.Errorf("handle kafka message failed, topic=%s partition=%d offset=%d err=%v",
@@ -139,6 +140,8 @@ func (h *tradeMessageHandler) ConsumeClaim(session sarama.ConsumerGroupSession, 
 }
 
 func (h *tradeMessageHandler) handleMessage(message *sarama.ConsumerMessage) error {
+	logx.Infof("entered handleMessage, topic=%s partition=%d offset=%d", message.Topic, message.Partition, message.Offset)
+
 	var trades []*TradeMessage
 	if err := json.Unmarshal(message.Value, &trades); err != nil {
 		return fmt.Errorf("unmarshal trade batch: %w", err)
@@ -162,6 +165,7 @@ func (h *tradeMessageHandler) handleMessage(message *sarama.ConsumerMessage) err
 	for _, klines := range klineMap {
 		klineCount += len(klines)
 	}
+
 
 	applied, err := persistTradesAsKlines(context.Background(), h.svcCtx, validTrades)
 	if err != nil {

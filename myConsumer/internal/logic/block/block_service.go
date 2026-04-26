@@ -94,10 +94,10 @@ func (b *BlockService) Stop() {
 }
 
 func (b *BlockService) handleTransacton(slot uint64, workID int) {
+	// buy:455953887
 	if slot == 0 {
 		return
 	}
-	fmt.Println(slot)
 
 	//判断该slot是否已入库
 	dbBlock, err := b.sc.BlockModel.FindOneBySlot(b.ctx, int64(slot))
@@ -158,6 +158,7 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		dbBlock.BlockTime = time.Now()
 	}
 
+	fmt.Println("SOL 区块高度：", dbBlock.BlockHeight)
 	//获取交易价格
 	tokenAccountMap, price := GetSolPrice(block, dbBlock, b)
 
