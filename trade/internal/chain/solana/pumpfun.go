@@ -12,6 +12,7 @@ import (
 
 	aSDK "github.com/gagliardetto/solana-go"
 	computebudget "github.com/gagliardetto/solana-go/programs/compute-budget"
+	system "github.com/gagliardetto/solana-go/programs/system"
 	"github.com/gagliardetto/solana-go/rpc"
 	"github.com/shopspring/decimal"
 )
@@ -60,6 +61,13 @@ func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, wall
 	var instructionNew aSDK.Instruction
 	var instructions []aSDK.Instruction
 
+	// Comment out jito-related code to avoid panic when jito is not configured
+	tipFee := tm.ListJitoFloorFee()
+
+	if tipFee <= 0 || tipFee >= constant.JitoMaxFee {
+		return nil, 0, xcode.AntiErr
+	}
+	jitoFeeInLamport := decimal.NewFromFloat32(float32(tipFee)).Mul(decimal.NewFromInt(Decimals2Value[constant.SolDecimal])).BigInt().Uint64()
 	//gasFeeInLamport：总的gas费用 GasPerSignature：签名费用  cuLimit：耗费的计算单元
 	//gasPriceMicroLamports：每个计算单元实际花费的gas费用
 	gasPriceMicroLamports := (gasFeeInLamport - constant.GasPerSignature) * 1e6 / uint64(cuLimit)
@@ -77,6 +85,15 @@ func (tm *TxManager) CreateGasByGasFee(ctx context.Context, isAntiMev bool, wall
 		// #2 - Compute Budget: SetComputeUnitLimit
 		//添加计算单元数量限制指令。表示这笔交易最多允许消耗多少个计算单元
 		instructionNew, err = computebudget.NewSetComputeUnitLimitInstruction(cuLimit).ValidateAndBuild()
+		if nil != err {
+			return nil, 0, err
+		}
+		instructions = append(instructions, instructionNew)
+	}
+
+	//如果抗mev,走jito,给jito账户转fee
+	if isAntiMev {
+		instructionNew, err = system.NewTransferInstruction(jitoFeeInLamport, walletAccount, aSDK.MustPublicKeyFromBase58(constant.TipAddress)).ValidateAndBuild()
 		if nil != err {
 			return nil, 0, err
 		}

@@ -108,7 +108,7 @@ func (m *defaultTradeModel) SaveBatchTrades(ctx context.Context, items []*Trade)
 func (m *defaultTradeModel) createShardTableIfNotExistsAndInsert(ctx context.Context, shardTableName string, items []*Trade) error {
 	err := m.createShardTableIfNotExists(ctx, shardTableName)
 	if err != nil {
-		err := m.createShardTableIfNotExists(ctx, shardTableName)
+		//err := m.createShardTableIfNotExists(ctx, shardTableName)
 		return fmt.Errorf("createShardTableIfNotExists error: %w, shardTableName: %v", err, shardTableName)
 	}
 

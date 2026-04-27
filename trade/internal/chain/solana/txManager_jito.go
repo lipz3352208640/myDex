@@ -6,11 +6,14 @@ import (
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/mr-tron/base58"
+	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/rest/httpc"
 
 	solana "github.com/gagliardetto/solana-go"
 	alt "github.com/gagliardetto/solana-go/programs/address-lookup-table"
@@ -34,6 +37,69 @@ type JitoBundleResponse struct {
 type JitoRPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+type JitoTipFloor struct {
+	Time                        time.Time `json:"time"`
+	LandedTips25ThPercentile    float64   `json:"landed_tips_25th_percentile"` //25%的成功交易给的jito费用
+	LandedTips50ThPercentile    float64   `json:"landed_tips_50th_percentile"` //50%的成功交易给的jito费用
+	LandedTips75ThPercentile    float64   `json:"landed_tips_75th_percentile"` //75%的成功交易给的jito费用
+	LandedTips95ThPercentile    float64   `json:"landed_tips_95th_percentile"` //95%的成功交易给的jito费用
+	LandedTips99ThPercentile    float64   `json:"landed_tips_99th_percentile"` //99%的成功交易给的jito费用
+	EmaLandedTips50ThPercentile float64   `json:"ema_landed_tips_50th_percentile"`
+}
+
+func (tm *TxManager) updateJitoFloorFee() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	res, err := tm.queryJitoTipRpc(ctx)
+	if err != nil {
+		logx.Error(err)
+		return
+	}
+	tm.RWLock.Lock()
+	tm.jitoTipFloor = res
+	tm.RWLock.Unlock()
+}
+
+func (tm *TxManager) CheckJitoFloorFee() {
+	tm.updateJitoFloorFee()
+
+	ticker := time.NewTicker(1 * time.Minute)
+	for {
+		select {
+		case <-tm.context.Done():
+			return
+		case <-ticker.C:
+			tm.updateJitoFloorFee()
+		}
+	}
+}
+
+func (tm *TxManager) ListJitoFloorFee() float64 {
+	tm.RWLock.RLock()
+	defer tm.RWLock.RUnlock()
+	return tm.jitoTipFloor.LandedTips50ThPercentile
+}
+
+func (tm *TxManager) queryJitoTipRpc(ctx context.Context) (*JitoTipFloor, error) {
+	resp, err := httpc.Do(ctx, http.MethodGet, "https://bundles.jito.wtf/api/v1/bundles/tip_floor", nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var jitoTipFloor []JitoTipFloor
+	err = json.Unmarshal(res, &jitoTipFloor)
+	if nil != err {
+		return nil, err
+	}
+	if len(jitoTipFloor) == 0 {
+		return nil, nil
+	}
+	return &jitoTipFloor[0], nil
 }
 
 func (tm *TxManager) FetchAddressLookupTables(
@@ -60,6 +126,7 @@ func (tm *TxManager) BuildVersionedTransaction(
 	timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	//拿到最新区块
 	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
 	if err != nil {
 		return nil, fmt.Errorf("get latest blockhash: %w", err)
@@ -67,6 +134,7 @@ func (tm *TxManager) BuildVersionedTransaction(
 
 	opts := []solana.TransactionOption{solana.TransactionPayer(payer)}
 	if len(tableKeys) > 0 {
+		//抓取alt账户
 		tables, err := tm.FetchAddressLookupTables(ctx, tableKeys)
 		if err != nil {
 			return nil, err
@@ -94,6 +162,7 @@ func (tm *TxManager) SimulateAnyTransaction(ctx context.Context, tx *solana.Tran
 	return nil
 }
 
+// 将bundle交易发送到jito
 func (tm *TxManager) SendJitoBundle(
 	ctx context.Context,
 	jitoEndpoint string,

@@ -39,24 +39,27 @@ func (t *ArbTicker) Start() {
 		return
 	}
 
+	//支付账户
 	payer, err := serviceWalletPublicKey()
 	if err != nil {
 		t.Errorf("arb ticker disabled, resolve payer failed: %v", err)
 		return
 	}
 
+	//base mint
 	startMint, err := solana.PublicKeyFromBase58(cfg.StartMint)
 	if err != nil {
 		t.Errorf("arb ticker disabled, invalid start mint: %v", err)
 		return
 	}
+	//token mint
 	midMint, err := solana.PublicKeyFromBase58(cfg.MidMint)
 	if err != nil {
 		t.Errorf("arb ticker disabled, invalid mid mint: %v", err)
 		return
 	}
 
-	//tip 接收账户
+	//jito tip 接收账户
 	var tipRecipient *solana.PublicKey
 	if cfg.JitoTipRecipient != "" {
 		pubkey, err := solana.PublicKeyFromBase58(cfg.JitoTipRecipient)
