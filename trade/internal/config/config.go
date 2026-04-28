@@ -22,6 +22,7 @@ type MysqlConfig struct {
 
 type Entity struct {
 	NodeUrl []string `json:"NodeUrl"`
+	JitoUrl string   `json:"JitoUrl,optional" json:",env=SOL_JITOURL"`
 	WSUrl   string   `json:"WSUrl,optional" json:",env=SOL_WSURL"`
 }
 

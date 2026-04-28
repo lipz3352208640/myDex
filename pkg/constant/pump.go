@@ -4,6 +4,7 @@ import "github.com/shopspring/decimal"
 
 const (
 	FeeReceiver = "77r1L6TyggUhwFkk3wFrMMkYS7xK6xJu78wuzMjr2PHZ"
+	TipAddress = "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5"
 
 	RaydiumV4SwapCU   = 150_000
 	PumpFunSwapCU     = 300_000

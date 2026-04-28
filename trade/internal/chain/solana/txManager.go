@@ -6,6 +6,7 @@ import (
 	"myDex/pkg/constant"
 	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/internal/chain/solana/pumpamm"
+	"sync"
 
 	// "dex/pkg/raydium/clmm/idl/generated/amm_v3"
 	"encoding/base64"
@@ -67,10 +68,12 @@ type TxManager struct {
 	context      context.Context
 	SimulateOnly bool
 	logx.Logger
-	pumpFunAmm *pumpamm.PumpfunAmm
+	pumpFunAmm   *pumpamm.PumpfunAmm
+	jitoTipFloor *JitoTipFloor
+	RWLock       sync.RWMutex
 }
 
-func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool) *TxManager {
+func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool, jitoEndPoint string) *TxManager {
 
 	tm := &TxManager{
 		DB:           db,
@@ -79,6 +82,21 @@ func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simul
 		SimulateOnly: simulateOnly,
 		Logger:       logx.WithContext(context.Background()).WithFields(logx.LogField{Key: "service", Value: "txManage"}),
 		pumpFunAmm:   pumpamm.NewPumpfunAmm(rpcEndpoint),
+	}
+
+	if len(jitoEndPoint) > 0 {
+		tm.jitoTipFloor = &JitoTipFloor{
+			Time:                        time.Now(),
+			LandedTips25ThPercentile:    0.000001,
+			LandedTips50ThPercentile:    0.00001,
+			LandedTips75ThPercentile:    0.00004,
+			LandedTips95ThPercentile:    0.006,
+			LandedTips99ThPercentile:    0.018,
+			EmaLandedTips50ThPercentile: 0.000014,
+		}
+		threading.GoSafe(func() {
+			tm.CheckJitoFloorFee()
+		})
 	}
 
 	threading.GoSafe(func() {

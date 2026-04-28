@@ -98,7 +98,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		c.Jupiter.SwapInstructionsURL,
 	)
 
-	txManager := solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly)
+	txManager := solana.NewTxManager(db, c.Helius.NodeUrl[1], c.Helius.NodeUrl[1], c.SimulateOnly, c.Helius.JitoUrl)
 	arbDetector := arbitrage.NewDetector(jupiterHTTPClient, c.Jupiter.ProfitThresholdLamports, c.Jupiter.TipBps)
 	jupiterBuilder := jupiterarb.NewBuilder(jupiterHTTPClient)
 

@@ -46,9 +46,10 @@ const (
 )
 
 const (
-	SolChainId    = "100000"
-	SolChainIdInt = 100000
+	SolChainId            = "100000"
+	SolChainIdInt         = 100000
 )
+
 
 type GasType int32
 

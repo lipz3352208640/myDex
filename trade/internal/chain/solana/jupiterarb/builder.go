@@ -35,13 +35,14 @@ func (b *Builder) BuildAtomicLoopInstructions(
 	}
 
 	mergedQuote := MergeQuotes(req.Opportunity)
+	//POST /swap/v1/swap Jupiter帮助构架交易内容
 	swapResp, err := b.swapProvider.GetSwapInstructions(ctx, &SwapRequest{
 		UserPublicKey:                 req.Payer,
-		WrapAndUnwrapSol:              false,
-		UseSharedAccounts:             false,
-		ComputeUnitPriceMicroLamports: 1,
-		DynamicComputeUnitLimit:       true,
-		SkipUserAccountsRPCCalls:      true,
+		WrapAndUnwrapSol:              false, //不用自动帮我做 SOL/WSOL 包装和解包
+		UseSharedAccounts:             false, //不用共享账户
+		ComputeUnitPriceMicroLamports: 1,     //很小的计算单元
+		DynamicComputeUnitLimit:       true,  //让 Jupiter 自动估算这笔交易需要多少 CU
+		SkipUserAccountsRPCCalls:      true,  //少做账户查询，追求速度
 		QuoteResponse:                 mergedQuote,
 	})
 	if err != nil {
@@ -50,6 +51,7 @@ func (b *Builder) BuildAtomicLoopInstructions(
 
 	var instructions []solana.Instruction
 
+	//计算单元占用限制
 	if swapResp.ComputeUnitLimit > 0 {
 		cuIx, err := computebudget.NewSetComputeUnitLimitInstruction(swapResp.ComputeUnitLimit).ValidateAndBuild()
 		if err != nil {
@@ -59,6 +61,7 @@ func (b *Builder) BuildAtomicLoopInstructions(
 	}
 
 	encoded := append([]EncodedInstruction{}, swapResp.ComputeBudgetInstructions...)
+	//swap交易指令
 	encoded = append(encoded, swapResp.SetupInstructions...)
 	for _, ix := range encoded {
 		decoded, err := decodeInstruction(ix)
@@ -74,6 +77,7 @@ func (b *Builder) BuildAtomicLoopInstructions(
 	}
 	instructions = append(instructions, swapIx)
 
+	//收尾指令 关闭临时账户，回收不用的rent等
 	if swapResp.CleanupInstruction != nil {
 		cleanupIx, err := decodeInstruction(*swapResp.CleanupInstruction)
 		if err != nil {
@@ -110,12 +114,15 @@ func (b *Builder) BuildAtomicLoopInstructions(
 	}, nil
 }
 
+// 合并两笔报价，生成具有双腿swap的交易指令
 func MergeQuotes(opp *arbitrage.Opportunity) *arbitrage.QuoteResponse {
+	//以第一笔报价作为底版
 	merged := cloneQuote(opp.FirstQuote)
 	merged.OutputMint = opp.SecondQuote.OutputMint
 	merged.OutAmount = opp.TargetOutAmount
 	merged.OtherAmountThreshold = opp.TargetOutAmount
 	merged.PriceImpactPct = "0"
+	//把第一段和第二段的routePlan合并 形成 WSOL ->wspl -> WSOL
 	merged.RoutePlan = append(append([]arbitrage.RoutePlanStep{}, opp.FirstQuote.RoutePlan...), opp.SecondQuote.RoutePlan...)
 	if merged.Raw != nil {
 		merged.Raw["outputMint"] = merged.OutputMint.String()
@@ -137,6 +144,7 @@ func cloneQuote(in *arbitrage.QuoteResponse) *arbitrage.QuoteResponse {
 	}
 
 	out := *in
+
 	if in.RoutePlan != nil {
 		out.RoutePlan = append([]arbitrage.RoutePlanStep{}, in.RoutePlan...)
 	}
