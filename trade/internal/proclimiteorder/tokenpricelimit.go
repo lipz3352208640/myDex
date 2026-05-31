@@ -14,6 +14,7 @@ import (
 	"myDex/trade/internal/svc"
 	"myDex/trade/trade"
 
+	"github.com/samber/lo"
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/shopspring/decimal"
@@ -35,29 +36,37 @@ func NewTokenPriceLimit(svc *svc.ServiceContext) *TokenPriceLimit {
 
 func (s *TokenPriceLimit) Consume(lowerSequence, upperSequence int64, buffer []*entity.OrderMessage) {
 	s.Infof("disruptor consume: lower=%d upper=%d", lowerSequence, upperSequence)
-	err := s.Svc.Pool.Submit(func() {
-		for i := lowerSequence; i <= upperSequence; i++ {
 
-			message := buffer[i%int64(len(buffer))]
-			if message == nil {
-				s.Errorf("disruptor consume nil message at sequence=%d", i)
-				continue
-			}
-			s.DoConsume(message)
+	for i := lowerSequence; i <= upperSequence; i++ {
+
+		message := buffer[i%int64(len(buffer))]
+		if message == nil {
+			s.Errorf("disruptor consume nil message at sequence=%d", i)
+			continue
 		}
-	})
-	if err != nil {
-		s.Errorf("submit token price limit task failed: %v", err)
+		s.DoConsume(message)
 	}
 }
 
 func (s *TokenPriceLimit) DoConsume(message *entity.OrderMessage) {
 	//step 1：judge swap type is buy or sell
-	if message.SwapType == int64(trade.SwapType_Buy) || message.SwapType == int64(trade.SwapType_Sell) {
-		s.processTokenPriceLimitOrdersFromRedis(message)
-	} else {
-		s.Errorf("not support swap type")
+
+	err := s.Svc.Pool.Submit(func() {
+		swapTypes := []trade.SwapType{trade.SwapType_Buy, trade.SwapType_Sell}
+		lo.ForEach[trade.SwapType](swapTypes, func(swapType trade.SwapType, _ int) {
+			message.SwapType = int64(swapType)
+			s.processTokenPriceLimitOrdersFromRedis(message)
+		})
+	})
+	if err != nil {
+		s.Error(err)
 	}
+
+	// if message.SwapType == int64(trade.SwapType_Buy) || message.SwapType == int64(trade.SwapType_Sell) {
+	// 	s.processTokenPriceLimitOrdersFromRedis(message)
+	// } else {
+	// 	s.Errorf("not support swap type")
+	// }
 
 }
 
