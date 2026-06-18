@@ -63,6 +63,7 @@ type CreateMarketTx struct {
 type TxManager struct {
 	Client       *ag_rpc.Client
 	MainClient   *ag_rpc.Client
+	JitoClient   *ag_rpc.Client
 	DB           *gorm.DB
 	rentFee      uint64
 	context      context.Context
@@ -74,12 +75,18 @@ type TxManager struct {
 }
 
 func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool, jitoEndPoint string) *TxManager {
+	var jitoClient *ag_rpc.Client
+	if len(jitoEndPoint) > 0 {
+		jitoClient = ag_rpc.New(jitoEndPoint)
+	}
 
 	tm := &TxManager{
 		DB:           db,
 		Client:       ag_rpc.New(rpcEndpoint),
 		MainClient:   ag_rpc.New(mainRpcEndpoint),
+		JitoClient:   jitoClient,
 		SimulateOnly: simulateOnly,
+		context:      context.Background(),
 		Logger:       logx.WithContext(context.Background()).WithFields(logx.LogField{Key: "service", Value: "txManage"}),
 		pumpFunAmm:   pumpamm.NewPumpfunAmm(rpcEndpoint),
 	}
@@ -319,6 +326,29 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 
 func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aSDK.Transaction) (string, error) {
 	tm.Infof("SendWithSignTransaction start")
+
+	tx := &transcation
+	if len(tx.Signatures) == 0 {
+		return "", fmt.Errorf("transaction has no signature")
+	}
+
+	if tm.SimulateOnly {
+		err := tm.simulate(ctx, tx)
+		if err != nil {
+			return "", err
+		}
+
+		return tx.Signatures[0].String(), nil
+	}
+
+	if tm.HasJitoTip(tx) {
+		sig, err := tm.SendViaJitoRetry(ctx, tx)
+		if nil != err {
+			logc.Infof(ctx, "SendWithSignTransaction via jito failed:%s", err.Error())
+			return "", err
+		}
+		return sig, nil
+	}
 
 	sig, err := tm.Client.SendTransactionWithOpts(ctx, &transcation, ag_rpc.TransactionOpts{
 		SkipPreflight:       false,
