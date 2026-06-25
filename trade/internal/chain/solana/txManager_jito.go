@@ -3,15 +3,16 @@ package solana
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
 	"myDex/pkg/constant"
 	"net/http"
-	"os"
+	//"os"
 	"strings"
 	"time"
+
+	"myDex/pkg/kmsenvelope"
 
 	"github.com/mr-tron/base58"
 	"github.com/zeromicro/go-zero/core/logc"
@@ -326,20 +327,12 @@ func (tm *TxManager) SignTransactionWithServiceKey(tx *solana.Transaction) error
 		return fmt.Errorf("transaction is nil")
 	}
 
-	privateKeyBase58 := os.Getenv("private_key")
-	if privateKeyBase58 == "" {
-		return fmt.Errorf("private key not set in environment variable")
-	}
-
-	privateKeyBytes, err := base58.Decode(privateKeyBase58)
+	privateKey, err := loadServicePrivateKey(context.Background())
 	if err != nil {
-		return fmt.Errorf("decode base58 private key: %w", err)
+		return err
 	}
-	if len(privateKeyBytes) != ed25519.PrivateKeySize {
-		return fmt.Errorf("invalid private key length: expected %d, got %d", ed25519.PrivateKeySize, len(privateKeyBytes))
-	}
+	defer kmsenvelope.Zero(privateKey)
 
-	privateKey := solana.PrivateKey(privateKeyBytes)
 	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
 		if privateKey.PublicKey().Equals(key) {
 			pk := privateKey

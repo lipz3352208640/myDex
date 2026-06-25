@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"myDex/pkg/constant"
+	"myDex/pkg/kmsenvelope"
 	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/internal/chain/solana/pumpamm"
 	"sync"
@@ -12,11 +13,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
-
-	"github.com/mr-tron/base58"
 
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
@@ -277,21 +275,11 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 	}
 	tm.Infof("SignTransaction unmarshal done, requiredSigners=%d", unsignedTx.Message.Header.NumRequiredSignatures)
 
-	//step 3: sign the transaction using the service's private key
-	privateKey := os.Getenv("private_key")
-	if privateKey == "" {
-		return aSDK.Transaction{}, "", fmt.Errorf("private key not set in environment variable")
-	}
-	// Decode base58 private key
-	privateKeyBytes, err := base58.Decode(privateKey)
+	privateKey, err := loadServicePrivateKey(ctx)
 	if err != nil {
-		return aSDK.Transaction{}, "", fmt.Errorf("failed to decode base58 private key: %v", err)
+		return aSDK.Transaction{}, "", err
 	}
-	// judge the length of private key bytes, ed25519 private key should be 64 bytes
-	if len(privateKeyBytes) != ed25519.PrivateKeySize {
-		return aSDK.Transaction{}, "", fmt.Errorf("invalid private key length: expected %d, got %d", ed25519.PrivateKeySize, len(privateKeyBytes))
-	}
-	ed25519PrivateKey := ed25519.PrivateKey(privateKeyBytes)
+	defer kmsenvelope.Zero(privateKey)
 
 	// Sign the transaction message
 	messageContent, err := unsignedTx.Message.MarshalBinary()
@@ -300,7 +288,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 		return aSDK.Transaction{}, "", fmt.Errorf("failed to marshal transaction message: %v", err)
 	}
 	tm.Infof("SignTransaction message marshaled, messageBytes=%d", len(messageContent))
-	signature := ed25519.Sign(ed25519PrivateKey, messageContent)
+	signature := ed25519.Sign(ed25519.PrivateKey(privateKey), messageContent)
 
 	// Set signatures for all required signers (assuming single signer for now)
 	numSigners := int(unsignedTx.Message.Header.NumRequiredSignatures)

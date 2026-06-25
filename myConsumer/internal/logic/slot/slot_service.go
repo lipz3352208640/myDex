@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/logic/entity"
 	"myDex/myConsumer/internal/svc"
 	"net"
@@ -30,6 +31,7 @@ type SlotService struct {
 	//服务取消
 	cancle   func(err error)
 	slotChan chan uint64
+	lastSlot uint64
 	//
 }
 
@@ -51,6 +53,7 @@ func (s *SlotService) Start() {
 	})
 
 	threading.GoSafe(func() {
+		s.lastSlot = s.initLastSlot()
 
 		for {
 			select {
@@ -60,9 +63,70 @@ func (s *SlotService) Start() {
 			default:
 			}
 			slot := s.getSlot()
-			s.slotChan <- slot
+			s.enqueueSlots(slot)
 		}
 	})
+}
+
+func (s *SlotService) initLastSlot() uint64 {
+	startBlock := s.ctx.Config.Sol.StartBlock
+	if startBlock > 0 {
+		slot := uint64(startBlock - 1)
+		s.Infof("slot cursor initialized from config, lastSlot=%d", slot)
+		return slot
+	}
+
+	block, err := s.ctx.BlockModel.GetLatestHandledSlot(s.context)
+	if err != nil {
+		if !errors.Is(err, solmodel.ErrNotFound) {
+			s.Errorf("init slot cursor from db failed, err=%v", err)
+		}
+		return 0
+	}
+	if block == nil || block.Slot <= 0 {
+		return 0
+	}
+
+	slot := uint64(block.Slot)
+	s.Infof("slot cursor initialized from db, lastSlot=%d", slot)
+	return slot
+}
+
+func (s *SlotService) enqueueSlots(slot uint64) {
+	if slot == 0 {
+		return
+	}
+
+	if s.lastSlot == 0 {
+		s.sendSlot(slot)
+		s.lastSlot = slot
+		return
+	}
+
+	//s.lastSlot库中的最大slot slot是websocket推送过来的最新slot
+	if slot <= s.lastSlot {
+		return
+	}
+
+	if slot > s.lastSlot+1 {
+		s.Infof("slot gap detected, lastSlot=%d currentSlot=%d missing=%d", s.lastSlot, slot, slot-s.lastSlot-1)
+	}
+
+	for nextSlot := s.lastSlot + 1; nextSlot <= slot; nextSlot++ {
+		if !s.sendSlot(nextSlot) {
+			return
+		}
+		s.lastSlot = nextSlot
+	}
+}
+
+func (s *SlotService) sendSlot(slot uint64) bool {
+	select {
+	case <-s.context.Done():
+		return false
+	case s.slotChan <- slot:
+		return true
+	}
 }
 
 func (s *SlotService) getSlot() uint64 {
