@@ -2,7 +2,6 @@ package slot
 
 import (
 	"errors"
-	"fmt"
 	"myDex/model/solmodel"
 	"myDex/myConsumer/internal/svc"
 	"time"
@@ -32,41 +31,45 @@ func (e *ErrSlotService) Stop() {
 }
 
 func (e *ErrSlotService) HandleSlotNotCompleted() {
-	startBlock := e.ctx.Config.Sol.StartBlock
-	//获取第一个失败的区块
-	if startBlock == 0 {
-		block, err := e.ctx.BlockModel.GetFirstFailedSlot(e.context)
-		if block == nil || err != nil {
-			return
-		} else {
-			startBlock = int(block.Slot)
-		}
+	startSlot := int64(e.ctx.Config.Sol.StartBlock)
+	if startSlot > 0 {
+		startSlot--
 	}
-	//扫描计时器。每5s扫描一次库中失败记录
-	scanTimer := time.NewTicker(5 * time.Second).C
-	//发送计时器。每1s将扫描中的数据发送到失败队列中
-	sendTimer := time.NewTicker(1 * time.Second).C
+
+	scanTimer := time.NewTicker(5 * time.Second)
+	defer scanTimer.Stop()
 
 	for {
 		select {
 		case <-e.context.Done():
 			return
-		case <-scanTimer:
-			blocks, err := e.ctx.BlockModel.GetBatchFailedBlockBySlot(e.context, int64(startBlock-100), 50)
-			if len(blocks) == 0 || errors.Is(err, solmodel.ErrNotFound) {
-				return
-			}
-			if err != nil {
+		case <-scanTimer.C:
+			blocks, err := e.ctx.BlockModel.GetBatchFailedBlockBySlot(e.context, startSlot, 50)
+			if err != nil && !errors.Is(err, solmodel.ErrNotFound) {
 				e.Errorf("process GetBatchFailedBlockBySlot faild is %w", err)
+				continue
+			}
+			if len(blocks) == 0 {
+				continue
 			}
 
 			for _, block := range blocks {
 				select {
 				case <-e.context.Done():
 					return
-				case <-sendTimer:
-					fmt.Println("发送失败slot:", block.Slot)
-					e.slotChan <- uint64(block.Slot)
+				case e.slotChan <- uint64(block.Slot):
+					e.Infof("send failed slot:%d", block.Slot)
+					startSlot = block.Slot
+				case <-time.After(time.Second):
+					e.Infof("send failed slot timeout:%d", block.Slot)
+					continue
+				}
+			}
+
+			if len(blocks) < 50 {
+				startSlot = int64(e.ctx.Config.Sol.StartBlock)
+				if startSlot > 0 {
+					startSlot--
 				}
 			}
 		}

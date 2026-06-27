@@ -26,6 +26,7 @@ type (
 		GetFirstFailedSlot(ctx context.Context) (*Block, error)
 		GetBatchFailedBlockBySlot(ctx context.Context, slot int64, limit int) ([]*Block, error)
 		FindOneNearSlot(ctx context.Context, slot int64) (*Block, error)
+		GetLatestHandledSlot(ctx context.Context) (*Block, error)
 	}
 
 	customBlockModel struct {
@@ -37,7 +38,7 @@ func (c customBlockModel) GetBatchFailedBlockBySlot(context context.Context, slo
 	var resp []*Block
 	err := c.conn.WithContext(context).Model(&Block{}).Where("status = ?", constant.BlockFailed).
 		Where("slot > ?", slot).
-		Order("slot Desc").
+		Order("slot Asc").
 		Limit(limit).Find(&resp).Error
 	if err != nil {
 		return nil, err
@@ -55,6 +56,18 @@ func (c customBlockModel) FindOneNearSlot(context context.Context, slot int64) (
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (c customBlockModel) GetLatestHandledSlot(ctx context.Context) (*Block, error) {
+	var resp Block
+	err := c.conn.WithContext(ctx).Model(&Block{}).
+		Where("status in ?", []int64{constant.BlockProcessed, constant.BlockSkipped}).
+		Order("slot Desc").
+		First(&resp).Error
+	if err == gormc.ErrNotFound {
+		return nil, err
+	}
+	return &resp, err
 }
 
 func (c customBlockModel) Insert(ctx context.Context, data *Block) error {

@@ -110,6 +110,9 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		dbBlock = &solmodel.Block{
 			Slot: int64(slot),
 		}
+	} else if dbBlock.Status == constant.BlockProcessed || dbBlock.Status == constant.BlockSkipped {
+		b.Infof("[work-%d] block already handled, skip slot=%d status=%d", workID, slot, dbBlock.Status)
+		return
 	}
 
 	block, err := b.GetSolBlockInfo(slot)
@@ -142,12 +145,6 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		return
 	}
 
-	if len(block.Transactions) == 0 {
-		b.Infof("[work-%d] block has no transaction details, slot=%d signatures=%d",
-			workID, slot, len(block.Signatures))
-		return
-	}
-
 	if block.BlockHeight != nil {
 		dbBlock.BlockHeight = *block.BlockHeight
 	}
@@ -158,13 +155,29 @@ func (b *BlockService) handleTransacton(slot uint64, workID int) {
 		dbBlock.BlockTime = time.Now()
 	}
 
+	if len(block.Transactions) == 0 {
+		b.Infof("[work-%d] block has no transaction details, slot=%d signatures=%d",
+			workID, slot, len(block.Signatures))
+		dbBlock.Status = constant.BlockProcessed
+		if err := b.saveOrUpdateSlot(dbBlock); err != nil {
+			b.Errorf("[work-%d] insert or update empty block fail, slot=%d err=%v", workID, slot, err)
+		}
+		return
+	}
+
 	fmt.Println("SOL 区块高度：", dbBlock.BlockHeight)
 	//获取交易价格
 	tokenAccountMap, price := GetSolPrice(block, dbBlock, b)
 
 	if price <= 0 {
+		dbBlock.Status = constant.BlockFailed
+		dbBlock.ErrMessage = "sol price is zero"
+		if err := b.saveOrUpdateSlot(dbBlock); err != nil {
+			b.Errorf("[work-%d] insert or update no price block fail, slot=%d err=%v", workID, slot, err)
+		}
 		return
 	}
+	dbBlock.SolPrice = price
 
 	fmt.Println("SOL 价格：", price)
 
@@ -221,7 +234,7 @@ func (b *BlockService) SendMessage(block *solmodel.Block, trades []*entity.Trade
 		logx.Errorf("json.Marshal err:%v", err)
 		return
 	}
-	err = b.sc.Kafka.SendMessage(b.sc.Config.Kafka.Topic, fmt.Sprintf("%s", block.Slot), data)
+	err = b.sc.Kafka.SendMessage(b.sc.Config.Kafka.Topic, fmt.Sprintf("%d", block.Slot), data)
 	if err != nil {
 		b.Errorf("SendMessage err:%v", err)
 		return
@@ -235,6 +248,17 @@ func (b *BlockService) saveOrUpdateSlot(block *solmodel.Block) error {
 		err = b.sc.BlockModel.Update(b.ctx, block)
 	} else {
 		err = b.sc.BlockModel.Insert(b.ctx, block)
+		if err != nil && strings.Contains(err.Error(), "Duplicate entry") {
+			dbBlock, findErr := b.sc.BlockModel.FindOneBySlot(b.ctx, block.Slot)
+			if findErr != nil {
+				return findErr
+			}
+			if dbBlock.Status == constant.BlockProcessed || dbBlock.Status == constant.BlockSkipped {
+				return nil
+			}
+			block.Id = dbBlock.Id
+			err = b.sc.BlockModel.Update(b.ctx, block)
+		}
 	}
 	return err
 }

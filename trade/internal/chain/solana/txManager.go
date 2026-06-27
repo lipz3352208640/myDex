@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"myDex/pkg/constant"
+	"myDex/pkg/kmsenvelope"
 	"myDex/trade/internal/chain/solana/entity"
 	"myDex/trade/internal/chain/solana/pumpamm"
 	"sync"
@@ -12,11 +13,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
-
-	"github.com/mr-tron/base58"
 
 	bin "github.com/gagliardetto/binary"
 	"github.com/gagliardetto/solana-go"
@@ -63,6 +61,7 @@ type CreateMarketTx struct {
 type TxManager struct {
 	Client       *ag_rpc.Client
 	MainClient   *ag_rpc.Client
+	JitoClient   *ag_rpc.Client
 	DB           *gorm.DB
 	rentFee      uint64
 	context      context.Context
@@ -75,17 +74,23 @@ type TxManager struct {
 
 type TxSendResult struct {
 	TxHash               string
-	SendSlot             uint64   //交易发送时的slot
-	LastValidBlockHeight uint64   //交易使用recent blockhash最晚可以用到哪个 block height，超过这个高度后，交易就过期，不能再上链。
+	SendSlot             uint64 //交易发送时的slot
+	LastValidBlockHeight uint64 //交易使用recent blockhash最晚可以用到哪个 block height，超过这个高度后，交易就过期，不能再上链。
 }
 
 func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool, jitoEndPoint string) *TxManager {
+	var jitoClient *ag_rpc.Client
+	if len(jitoEndPoint) > 0 {
+		jitoClient = ag_rpc.New(jitoEndPoint)
+	}
 
 	tm := &TxManager{
 		DB:           db,
 		Client:       ag_rpc.New(rpcEndpoint),
 		MainClient:   ag_rpc.New(mainRpcEndpoint),
+		JitoClient:   jitoClient,
 		SimulateOnly: simulateOnly,
+		context:      context.Background(),
 		Logger:       logx.WithContext(context.Background()).WithFields(logx.LogField{Key: "service", Value: "txManage"}),
 		pumpFunAmm:   pumpamm.NewPumpfunAmm(rpcEndpoint),
 	}
@@ -280,21 +285,11 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 	}
 	tm.Infof("SignTransaction unmarshal done, requiredSigners=%d", unsignedTx.Message.Header.NumRequiredSignatures)
 
-	//step 3: sign the transaction using the service's private key
-	privateKey := os.Getenv("private_key")
-	if privateKey == "" {
-		return aSDK.Transaction{}, "", fmt.Errorf("private key not set in environment variable")
-	}
-	// Decode base58 private key
-	privateKeyBytes, err := base58.Decode(privateKey)
+	privateKey, err := loadServicePrivateKey(ctx)
 	if err != nil {
-		return aSDK.Transaction{}, "", fmt.Errorf("failed to decode base58 private key: %v", err)
+		return aSDK.Transaction{}, "", err
 	}
-	// judge the length of private key bytes, ed25519 private key should be 64 bytes
-	if len(privateKeyBytes) != ed25519.PrivateKeySize {
-		return aSDK.Transaction{}, "", fmt.Errorf("invalid private key length: expected %d, got %d", ed25519.PrivateKeySize, len(privateKeyBytes))
-	}
-	ed25519PrivateKey := ed25519.PrivateKey(privateKeyBytes)
+	defer kmsenvelope.Zero(privateKey)
 
 	// Sign the transaction message
 	messageContent, err := unsignedTx.Message.MarshalBinary()
@@ -303,7 +298,7 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 		return aSDK.Transaction{}, "", fmt.Errorf("failed to marshal transaction message: %v", err)
 	}
 	tm.Infof("SignTransaction message marshaled, messageBytes=%d", len(messageContent))
-	signature := ed25519.Sign(ed25519PrivateKey, messageContent)
+	signature := ed25519.Sign(ed25519.PrivateKey(privateKey), messageContent)
 
 	// Set signatures for all required signers (assuming single signer for now)
 	numSigners := int(unsignedTx.Message.Header.NumRequiredSignatures)
@@ -342,6 +337,37 @@ func (tm *TxManager) SendWithSignTransactionWithResult(ctx context.Context, tran
 	sendSlot, err := tm.Client.GetSlot(ctx, ag_rpc.CommitmentProcessed)
 	if err != nil {
 		tm.Errorf("GetSlot before SendTransaction failed:%s", err.Error())
+	}
+
+	tx := &transcation
+	if len(tx.Signatures) == 0 {
+		return nil, fmt.Errorf("transaction has no signature")
+	}
+
+	if tm.SimulateOnly {
+		err := tm.simulate(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &TxSendResult{
+			TxHash:               tx.Signatures[0].String(),
+			SendSlot:             sendSlot,
+			LastValidBlockHeight: lastValidBlockHeight,
+		}, nil
+	}
+
+	if tm.HasJitoTip(tx) {
+		sig, err := tm.SendViaJitoRetry(ctx, tx)
+		if nil != err {
+			logc.Infof(ctx, "SendWithSignTransaction via jito failed:%s", err.Error())
+			return nil, err
+		}
+		return &TxSendResult{
+			TxHash:               sig,
+			SendSlot:             sendSlot,
+			LastValidBlockHeight: lastValidBlockHeight,
+		}, nil
 	}
 
 	sig, err := tm.Client.SendTransactionWithOpts(ctx, &transcation, ag_rpc.TransactionOpts{

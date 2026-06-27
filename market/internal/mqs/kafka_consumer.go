@@ -133,6 +133,7 @@ func (h *tradeMessageHandler) ConsumeClaim(session sarama.ConsumerGroupSession, 
 				message.Topic, message.Partition, message.Offset, err)
 			continue
 		}
+		//标记offset已消费，Sarama 后台按 AutoCommit.Interval 周期自动提交已标记的 offset
 		//在消息处理后，进行offset提交，避免消息处理失败，offset已经提交，下次消费数据丢失
 		session.MarkMessage(message, "")
 	}
@@ -165,7 +166,6 @@ func (h *tradeMessageHandler) handleMessage(message *sarama.ConsumerMessage) err
 	for _, klines := range klineMap {
 		klineCount += len(klines)
 	}
-
 
 	applied, err := persistTradesAsKlines(context.Background(), h.svcCtx, validTrades)
 	if err != nil {

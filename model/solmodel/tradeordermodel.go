@@ -11,6 +11,11 @@ import (
 var _ = InitField
 var _ TradeOrderModel = (*customTradeOrderModel)(nil)
 
+const (
+	tradeOrderStatusWait int64 = 1
+	tradeOrderStatusProc int64 = 2
+)
+
 type (
 	// TradeOrderModel is an interface to be customized, add more methods here,
 	// and implement the added methods in customTradeOrderModel.
@@ -23,6 +28,7 @@ type (
 		WithSession(tx *gorm.DB) TradeOrderModel
 		InsertWithLog(ctx context.Context, data *TradeOrder) error
 		UpdateOrder(ctx context.Context, order *TradeOrder, updateField []string) error
+		ClaimWaitingOrder(ctx context.Context, order *TradeOrder) (bool, error)
 		FindOnChainOrderByChainId(ctx context.Context, chainId int64, limit int, offset int) ([]*TradeOrder, error)
 	}
 
@@ -56,6 +62,26 @@ func (c customTradeOrderModel) UpdateOrder(ctx context.Context, data *TradeOrder
 		}
 		return NewTradeOrderLogModel(tx).InsertWithOrder(ctx, data)
 	})
+}
+
+func (c customTradeOrderModel) ClaimWaitingOrder(ctx context.Context, data *TradeOrder) (bool, error) {
+	claimed := false
+	err := c.conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&TradeOrder{}).
+			Where("id = ? AND status = ?", data.Id, tradeOrderStatusWait).
+			Update("status", tradeOrderStatusProc)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+
+		claimed = true
+		data.Status = tradeOrderStatusProc
+		return NewTradeOrderLogModel(tx).InsertWithOrder(context.Background(), data)
+	})
+	return claimed, err
 }
 
 func (c customTradeOrderModel) WithSession(tx *gorm.DB) TradeOrderModel {

@@ -14,7 +14,9 @@ import (
 	"myDex/trade/internal/svc"
 	"myDex/trade/trade"
 
+	"github.com/samber/lo"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/threading"
 
 	"github.com/shopspring/decimal"
 )
@@ -35,29 +37,37 @@ func NewTokenPriceLimit(svc *svc.ServiceContext) *TokenPriceLimit {
 
 func (s *TokenPriceLimit) Consume(lowerSequence, upperSequence int64, buffer []*entity.OrderMessage) {
 	s.Infof("disruptor consume: lower=%d upper=%d", lowerSequence, upperSequence)
-	err := s.Svc.Pool.Submit(func() {
-		for i := lowerSequence; i <= upperSequence; i++ {
 
-			message := buffer[i%int64(len(buffer))]
-			if message == nil {
-				s.Errorf("disruptor consume nil message at sequence=%d", i)
-				continue
-			}
-			s.DoConsume(message)
+	for i := lowerSequence; i <= upperSequence; i++ {
+
+		message := buffer[i%int64(len(buffer))]
+		if message == nil {
+			s.Errorf("disruptor consume nil message at sequence=%d", i)
+			continue
 		}
-	})
-	if err != nil {
-		s.Errorf("submit token price limit task failed: %v", err)
+		s.DoConsume(message)
 	}
 }
 
 func (s *TokenPriceLimit) DoConsume(message *entity.OrderMessage) {
 	//step 1：judge swap type is buy or sell
-	if message.SwapType == int64(trade.SwapType_Buy) || message.SwapType == int64(trade.SwapType_Sell) {
-		s.processTokenPriceLimitOrdersFromRedis(message)
-	} else {
-		s.Errorf("not support swap type")
+
+	err := s.Svc.Pool.Submit(func() {
+		swapTypes := []trade.SwapType{trade.SwapType_Buy, trade.SwapType_Sell}
+		lo.ForEach[trade.SwapType](swapTypes, func(swapType trade.SwapType, _ int) {
+			message.SwapType = int64(swapType)
+			s.processTokenPriceLimitOrdersFromRedis(message)
+		})
+	})
+	if err != nil {
+		s.Error(err)
 	}
+
+	// if message.SwapType == int64(trade.SwapType_Buy) || message.SwapType == int64(trade.SwapType_Sell) {
+	// 	s.processTokenPriceLimitOrdersFromRedis(message)
+	// } else {
+	// 	s.Errorf("not support swap type")
+	// }
 
 }
 
@@ -139,11 +149,17 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 			remain = append(remain, info)
 		}
 	}
+	claimedOrders := make([]*solmodel.TradeOrder, 0, len(triggered))
 	fmt.Println("21111")
 	for _, info := range triggered {
-		if err := s.executeLimitTokenPriceOrder(ctx, message, info.OrderId); err != nil {
-			s.Errorf("execute limit order failed, orderId=%d err=%v", info.OrderId, err)
+		order, claimed, err := s.claimLimitTokenPriceOrder(ctx, info.OrderId)
+		if err != nil {
+			s.Errorf("claim limit order failed, orderId=%d err=%v", info.OrderId, err)
 			remain = append(remain, info)
+			continue
+		}
+		if claimed {
+			claimedOrders = append(claimedOrders, order)
 		}
 	}
 
@@ -162,6 +178,14 @@ func (s *TokenPriceLimit) processTokenPriceLimitOrdersFromRedis(message *entity.
 			s.Errorf("rewrite remain order failed, orderId=%d err=%v", info.OrderId, err)
 			return
 		}
+	}
+
+	for _, order := range claimedOrders {
+		order := order
+		message := *message
+		threading.GoSafe(func() {
+			s.executeLimitTokenPriceOrder(context.Background(), &message, order)
+		})
 	}
 }
 
@@ -218,26 +242,31 @@ return 0
 	}
 }
 
-func (s *TokenPriceLimit) executeLimitTokenPriceOrder(ctx context.Context, message *entity.OrderMessage, orderID int64) error {
+func (s *TokenPriceLimit) claimLimitTokenPriceOrder(ctx context.Context, orderID int64) (*solmodel.TradeOrder, bool, error) {
 	order, err := s.Svc.TradeOrderModel.FindOne(ctx, orderID)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 	fmt.Println("31111")
 	if order.Status != int64(enum.OrderStatus_Wait) {
-		return nil
+		return order, false, nil
 	}
 
-	order.Status = int64(enum.OrderStatus_Proc)
-	if err := s.Svc.TradeOrderModel.UpdateOrder(ctx, order, []string{"status"}); err != nil {
-		return err
+	claimed, err := s.Svc.TradeOrderModel.ClaimWaitingOrder(ctx, order)
+	if err != nil {
+		return nil, false, err
 	}
+	return order, claimed, nil
+}
 
+func (s *TokenPriceLimit) executeLimitTokenPriceOrder(ctx context.Context, message *entity.OrderMessage, order *solmodel.TradeOrder) {
 	pairInfo, marketReq, err := s.buildTriggeredMarketOrder(ctx, order, message)
 	if err != nil {
-		order.Status = int64(enum.OrderStatus_Wait)
-		_ = s.Svc.TradeOrderModel.UpdateOrder(ctx, order, []string{"status"})
-		return err
+		order.Status = int64(enum.OrderStatus_Fail)
+		order.FailReason = err.Error()
+		_ = s.Svc.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "fail_reason"})
+		s.Errorf("build triggered market order failed, orderId=%d err=%v", order.Id, err)
+		return
 	}
 
 	fmt.Printf("pairInfo=%+v marketReq=%+v \n", pairInfo, marketReq)
@@ -246,10 +275,9 @@ func (s *TokenPriceLimit) executeLimitTokenPriceOrder(ctx context.Context, messa
 		order.Status = int64(enum.OrderStatus_Fail)
 		order.FailReason = err.Error()
 		_ = s.Svc.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "fail_reason"})
-		return err
+		s.Errorf("create market tx failed, orderId=%d err=%v", order.Id, err)
+		return
 	}
-
-	return nil
 }
 
 func (s *TokenPriceLimit) buildTriggeredMarketOrder(ctx context.Context, order *solmodel.TradeOrder, message *entity.OrderMessage) (*market.PairInfo, *trade.MarketOrderRequest, error) {

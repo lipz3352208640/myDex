@@ -3,15 +3,19 @@ package solana
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
+	"myDex/pkg/constant"
 	"net/http"
-	"os"
+	//"os"
+	"strings"
 	"time"
 
+	"myDex/pkg/kmsenvelope"
+
 	"github.com/mr-tron/base58"
+	"github.com/zeromicro/go-zero/core/logc"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest/httpc"
 
@@ -49,6 +53,8 @@ type JitoTipFloor struct {
 	EmaLandedTips50ThPercentile float64   `json:"ema_landed_tips_50th_percentile"`
 }
 
+const JitoRateLimitCode = "32097"
+
 func (tm *TxManager) updateJitoFloorFee() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -79,6 +85,9 @@ func (tm *TxManager) CheckJitoFloorFee() {
 func (tm *TxManager) ListJitoFloorFee() float64 {
 	tm.RWLock.RLock()
 	defer tm.RWLock.RUnlock()
+	if tm.jitoTipFloor == nil {
+		return 0
+	}
 	return tm.jitoTipFloor.LandedTips50ThPercentile
 }
 
@@ -226,25 +235,104 @@ func (tm *TxManager) SendJitoBundle(
 	return bundleResp.Result, nil
 }
 
+func (tm *TxManager) SendViaJitoRetry(ctx context.Context, tx *solana.Transaction) (string, error) {
+	if tm.JitoClient == nil {
+		return "", fmt.Errorf("jito client is not configured")
+	}
+	if tx == nil {
+		return "", fmt.Errorf("transaction is nil")
+	}
+
+	if err := tm.simulate(ctx, tx); err != nil {
+		return "", err
+	}
+
+	var lastErr error
+	for i := 0; i < 5; i++ {
+		sig, err := tm.JitoClient.SendTransaction(ctx, tx)
+		if err == nil {
+			if sig.IsZero() {
+				return "", fmt.Errorf("jito send transaction returned empty signature")
+			}
+			return sig.String(), nil
+		}
+
+		lastErr = err
+		if !strings.Contains(err.Error(), JitoRateLimitCode) {
+			logc.Error(ctx, err)
+			return "", err
+		}
+
+		logc.Info(ctx, err)
+		if err := sleepWithContext(ctx, jitoRetryBackoff(i)); err != nil {
+			return "", err
+		}
+	}
+
+	return "", lastErr
+}
+
+func (tm *TxManager) HasJitoTip(tx *solana.Transaction) bool {
+	if tx == nil {
+		return false
+	}
+
+	tipAddress := solana.MustPublicKeyFromBase58(constant.TipAddress)
+	for _, instruction := range tx.Message.Instructions {
+		programID, err := tx.Message.Program(instruction.ProgramIDIndex)
+		if err != nil || !programID.Equals(solana.SystemProgramID) {
+			continue
+		}
+		if len(instruction.Accounts) < 2 {
+			continue
+		}
+
+		to, err := tx.Message.Account(instruction.Accounts[1])
+		if err != nil {
+			continue
+		}
+		if to.Equals(tipAddress) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func jitoRetryBackoff(attempt int) time.Duration {
+	delay := 200 * time.Millisecond
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+	}
+	if delay > 3*time.Second {
+		return 3 * time.Second
+	}
+	return delay
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 func (tm *TxManager) SignTransactionWithServiceKey(tx *solana.Transaction) error {
 	if tx == nil {
 		return fmt.Errorf("transaction is nil")
 	}
 
-	privateKeyBase58 := os.Getenv("private_key")
-	if privateKeyBase58 == "" {
-		return fmt.Errorf("private key not set in environment variable")
-	}
-
-	privateKeyBytes, err := base58.Decode(privateKeyBase58)
+	privateKey, err := loadServicePrivateKey(context.Background())
 	if err != nil {
-		return fmt.Errorf("decode base58 private key: %w", err)
+		return err
 	}
-	if len(privateKeyBytes) != ed25519.PrivateKeySize {
-		return fmt.Errorf("invalid private key length: expected %d, got %d", ed25519.PrivateKeySize, len(privateKeyBytes))
-	}
+	defer kmsenvelope.Zero(privateKey)
 
-	privateKey := solana.PrivateKey(privateKeyBytes)
 	_, err = tx.Sign(func(key solana.PublicKey) *solana.PrivateKey {
 		if privateKey.PublicKey().Equals(key) {
 			pk := privateKey
