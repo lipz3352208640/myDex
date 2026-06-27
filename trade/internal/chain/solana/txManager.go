@@ -73,6 +73,12 @@ type TxManager struct {
 	RWLock       sync.RWMutex
 }
 
+type TxSendResult struct {
+	TxHash               string
+	SendSlot             uint64   //交易发送时的slot
+	LastValidBlockHeight uint64   //交易使用recent blockhash最晚可以用到哪个 block height，超过这个高度后，交易就过期，不能再上链。
+}
+
 func NewTxManager(db *gorm.DB, rpcEndpoint string, mainRpcEndpoint string, simulateOnly bool, jitoEndPoint string) *TxManager {
 
 	tm := &TxManager{
@@ -179,12 +185,16 @@ func (tm *TxManager) simulate(ctx context.Context, tx *aSDK.Transaction) error {
 
 // BuildUnsignedTransaction builds an unsigned transaction for third-party wallet signing
 func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketTx *entity.MarketTx) (string, error) {
+	unsignedTx, _, err := tm.BuildUnsignedTransactionWithResult(ctx, createMarketTx)
+	return unsignedTx, err
+}
 
+func (tm *TxManager) BuildUnsignedTransactionWithResult(ctx context.Context, createMarketTx *entity.MarketTx) (string, uint64, error) {
 	tm.Infof("Building unsigned transaction for third-party wallet signing")
 
 	in, err := convertMarketTx(createMarketTx)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	//step 1: get instructions
@@ -193,12 +203,12 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	case constant.PumpFunName:
 		instructions, err = tm.CreateMarketOrderPumpfun(ctx, in)
 		if err != nil {
-			return "", err
+			return "", 0, err
 		}
 	case constant.PumpFunAmmName:
 		instructions, err = tm.pumpFunAmm.CreateMarketOrderPumpfunAmm(in)
 		if err != nil {
-			return "", err
+			return "", 0, err
 		}
 	// case constants.RaydiumV4, constants.RaydiumConcentratedLiquidity, constants.RaydiumCPMM:
 	// 	instructions, err = tm.CreateMarketOrderDex(ctx, in)
@@ -206,7 +216,7 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	// 		return "", err
 	// 	}
 	default:
-		return "", fmt.Errorf("TradePoolName:%s not support", in.TradePoolName)
+		return "", 0, fmt.Errorf("TradePoolName:%s not support", in.TradePoolName)
 	}
 	tm.Infof("BuildUnsignedTransaction instructions ready, count=%d tradePool=%s", len(instructions), in.TradePoolName)
 
@@ -215,9 +225,9 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
+	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentProcessed)
 	if err != nil {
-		return "", fmt.Errorf("failed to get latest blockhash: %w", err)
+		return "", 0, fmt.Errorf("failed to get latest blockhash: %w", err)
 	}
 	tm.Infof("GetLatestBlockhash done, blockhash=%s", resp.Value.Blockhash.String())
 
@@ -225,12 +235,12 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	//step 3: create unsigned transaction
 	feePayer, err := aSDK.PublicKeyFromBase58(createMarketTx.UserWalletAddress)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	tm.Infof("NewTransaction start, feePayer=%s", feePayer.String())
 	tx, err := aSDK.NewTransaction(instructions, resp.Value.Blockhash, aSDK.TransactionPayer(feePayer))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	// 初始化一个空的签名数组，长度为交易消息头中指定的需要签名的账户数量
@@ -243,12 +253,12 @@ func (tm *TxManager) BuildUnsignedTransaction(ctx context.Context, createMarketT
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		logx.WithContext(ctx).Errorf("Failed to serialize transaction: %v", err)
-		return "", err
+		return "", 0, err
 	}
 	tm.Infof("BuildUnsignedTransaction done, signers=%d serializedBytes=%d", numSigners, len(txData))
 
 	// Return the serialized transaction as base64
-	return base64.StdEncoding.EncodeToString(txData), nil
+	return base64.StdEncoding.EncodeToString(txData), resp.Value.LastValidBlockHeight, nil
 }
 
 // SignTransaction signs an unsigned transaction (base64) using the service's private key and returns the signature
@@ -318,18 +328,36 @@ func (tm *TxManager) SignTransaction(ctx context.Context, tx string) (aSDK.Trans
 }
 
 func (tm *TxManager) SendWithSignTransaction(ctx context.Context, transcation aSDK.Transaction) (string, error) {
+	result, err := tm.SendWithSignTransactionWithResult(ctx, transcation, 0)
+	if err != nil {
+		return "", err
+	}
+	return result.TxHash, nil
+}
+
+func (tm *TxManager) SendWithSignTransactionWithResult(ctx context.Context, transcation aSDK.Transaction, lastValidBlockHeight uint64) (*TxSendResult, error) {
 	tm.Infof("SendWithSignTransaction start")
+
+	//发送前记录send_slot
+	sendSlot, err := tm.Client.GetSlot(ctx, ag_rpc.CommitmentProcessed)
+	if err != nil {
+		tm.Errorf("GetSlot before SendTransaction failed:%s", err.Error())
+	}
 
 	sig, err := tm.Client.SendTransactionWithOpts(ctx, &transcation, ag_rpc.TransactionOpts{
 		SkipPreflight:       false,
-		PreflightCommitment: ag_rpc.CommitmentConfirmed,
+		PreflightCommitment: ag_rpc.CommitmentProcessed,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to send transaction: %v", err)
+		return nil, fmt.Errorf("failed to send transaction: %v", err)
 	}
 	if sig.IsZero() {
-		return "", fmt.Errorf("send transaction returned empty signature")
+		return nil, fmt.Errorf("send transaction returned empty signature")
 	}
 	tm.Infof("SendWithSignTransaction done, signature=%s", sig.String())
-	return sig.String(), nil
+	return &TxSendResult{
+		TxHash:               sig.String(),
+		SendSlot:             sendSlot,
+		LastValidBlockHeight: lastValidBlockHeight, //这个
+	}, nil
 }

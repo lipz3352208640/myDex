@@ -65,8 +65,14 @@ type (
 		ServerFee       float64   `gorm:"column:server_fee"`       // sol
 		JitoFee         float64   `gorm:"column:jito_fee"`         // sol
 		TxHash          string    `gorm:"column:tx_hash"`
-		DexName         string    `gorm:"column:dex_name"` // 交易时选取的交易所
-		PairCa          string    `gorm:"column:pair_ca"`  // 交易时选取的交易池
+		SendSlot        int64     `gorm:"column:send_slot"`         // Slot when SendTransaction was submitted
+		LandedSlot      int64     `gorm:"column:landed_slot"`       // Slot where transaction landed
+		SlotDiff        int64     `gorm:"column:slot_diff"`         // landed_slot - send_slot
+		ConfirmStatus   string    `gorm:"column:confirm_status"`    // processed/confirmed/finalized/expired
+		ConfirmMs       int64     `gorm:"column:confirm_ms"`        // milliseconds from send to finalized/failed
+		LastValidHeight int64     `gorm:"column:last_valid_height"` // latest blockhash last valid block height
+		DexName         string    `gorm:"column:dex_name"`          // 交易时选取的交易所
+		PairCa          string    `gorm:"column:pair_ca"`           // 交易时选取的交易池
 		CreatedAt       time.Time `gorm:"column:created_at"`
 		DrawdownPrice   float64   `gorm:"column:drawdown_price"`   // 回撤触发价格
 		TrailingPercent int64     `gorm:"column:trailing_percent"` // 回撤百分比

@@ -16,9 +16,12 @@ import (
 	"strings"
 	"time"
 
+	aSDK "github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/programs/token"
+	ag_rpc "github.com/gagliardetto/solana-go/rpc"
 	"github.com/shopspring/decimal"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/threading"
 )
 
 type CreateMarketOrderLogic struct {
@@ -26,6 +29,8 @@ type CreateMarketOrderLogic struct {
 	svcCtx *svc.ServiceContext
 	logx.Logger
 }
+
+const txFinalizeWatchTimeout = 2 * time.Minute
 
 func NewCreateMarketOrderLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CreateMarketOrderLogic {
 	return &CreateMarketOrderLogic{
@@ -222,10 +227,11 @@ func BoolToInt64(b bool) int64 {
 func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pairInfo *market.PairInfo, in *trade.MarketOrderRequest) (string, error) {
 	var err error
 	var txHash string
+	var sendResult *solanachain.TxSendResult
 	defer func() {
 		// 如果订单状态是触发中 并且有错误，那么将订单状态改为失败
 		if order.Status == int64(enum.OrderStatus_Proc) && err != nil {
-			err2 := l.updateDbByTxResult(order, nil, "", err)
+			err2 := l.updateDbByTxResult(order, nil, nil, "", err)
 			if err2 != nil {
 				l.Errorf("update order err err is %v", err2)
 			}
@@ -286,28 +292,31 @@ func (l *CreateMarketOrderLogic) CreateMarketTx(order *solmodel.TradeOrder, pair
 			l.Info("AutoSlippageRetry")
 		}
 
-		//txHash, err = l.createAndSendTx(param)
-		txHash, err = l.CreateAndSendPumpfunBuyWithTokenSwap(param, "/root/dev-token-swap-pool.json", "0.01", "0")
+		// txHash, sendResult, err = l.createAndSendTx(param)
+		txHash, sendResult, err = l.CreateAndSendPumpfunBuyWithTokenSwap(param, "/root/dev-token-swap-pool.json", "0.01", "0")
 		if err != nil {
 			err = convertSwapErr(pairInfo.Name, err)
 		} else {
 			break
 		}
 	}
-	err = l.updateDbByTxResult(order, param, txHash, err)
+	err = l.updateDbByTxResult(order, param, sendResult, txHash, err)
 	if err != nil {
 		return "", fmt.Errorf("updateDbByTxResult err is %v", err)
+	}
+	if sendResult != nil && sendResult.TxHash != "" {
+		l.watchMarketTxFinality(order.Id, sendResult)
 	}
 	return txHash, nil
 }
 
-func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (string, error) {
+func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (string, *solanachain.TxSendResult, error) {
 	chainId := marketTx.ChainId
 	if chainId == constant.SolChainIdInt {
 		l.Infof("createAndSendTx start, wallet=%s pair=%s swapType=%d amountIn=%s", marketTx.UserWalletAddress, marketTx.PairAddr, marketTx.SwapType, marketTx.AmountIn)
-		txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransaction(l.ctx, marketTx)
+		txToString, lastValidBlockHeight, err := l.svcCtx.TxMananger.BuildUnsignedTransactionWithResult(l.ctx, marketTx)
 		if err != nil {
-			return "", fmt.Errorf("Failed to build unsigned transaction: %w", err)
+			return "", nil, fmt.Errorf("Failed to build unsigned transaction: %w", err)
 		}
 		l.Infof("BuildUnsignedTransaction done, txBase64Len=%d", len(txToString))
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -316,25 +325,25 @@ func (l *CreateMarketOrderLogic) createAndSendTx(marketTx *entity.MarketTx) (str
 		signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(timeoutCtx, txToString)
 		if err != nil {
 			l.Errorf("Failed to sign transaction: %v", err)
-			return "", fmt.Errorf("Failed to sign transaction: %w", err)
+			return "", nil, fmt.Errorf("Failed to sign transaction: %w", err)
 		}
 		l.Infof("SignTransaction done")
 
 		timeoutCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		l.Infof("SendWithSignTransaction start")
-		txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
+		sendResult, err := l.svcCtx.TxMananger.SendWithSignTransactionWithResult(timeoutCtx, signedTx, lastValidBlockHeight)
 		if err != nil {
 			l.Errorf("Failed to send transaction: %v", err)
-			return "", fmt.Errorf("Failed to send transaction: %w", err)
+			return "", nil, fmt.Errorf("Failed to send transaction: %w", err)
 		}
-		if txHash == "" {
-			return "", fmt.Errorf("send transaction returned empty tx hash")
+		if sendResult.TxHash == "" {
+			return "", nil, fmt.Errorf("send transaction returned empty tx hash")
 		}
-		l.Infof("SendWithSignTransaction done, txHash=%s", txHash)
-		return txHash, nil
+		l.Infof("SendWithSignTransaction done, txHash=%s", sendResult.TxHash)
+		return sendResult.TxHash, sendResult, nil
 	}
-	return "", fmt.Errorf("unsupported chain id: %d", chainId)
+	return "", nil, fmt.Errorf("unsupported chain id: %d", chainId)
 }
 
 // CreateAndSendPumpfunBuyWithTokenSwap is a temporary helper that keeps the
@@ -346,20 +355,20 @@ func (l *CreateMarketOrderLogic) CreateAndSendPumpfunBuyWithTokenSwap(
 	tokenSwapConfigPath string,
 	swapAmountUI string,
 	minOutUI string,
-) (string, error) {
+) (string, *solanachain.TxSendResult, error) {
 	if marketTx == nil {
-		return "", fmt.Errorf("marketTx is nil")
+		return "", nil, fmt.Errorf("marketTx is nil")
 	}
 	if marketTx.ChainId != constant.SolChainIdInt {
-		return "", fmt.Errorf("unsupported chain id: %d", marketTx.ChainId)
+		return "", nil, fmt.Errorf("unsupported chain id: %d", marketTx.ChainId)
 	}
 
 	poolCfg, err := solanachain.LoadTokenSwapPoolConfig(tokenSwapConfigPath)
 	if err != nil {
-		return "", fmt.Errorf("load token swap pool config: %w", err)
+		return "", nil, fmt.Errorf("load token swap pool config: %w", err)
 	}
 
-	txToString, err := l.svcCtx.TxMananger.BuildUnsignedTransactionPumpfunWithTokenSwap(
+	txToString, lastValidBlockHeight, err := l.svcCtx.TxMananger.BuildUnsignedTransactionPumpfunWithTokenSwapWithResult(
 		l.ctx,
 		marketTx,
 		poolCfg,
@@ -367,26 +376,26 @@ func (l *CreateMarketOrderLogic) CreateAndSendPumpfunBuyWithTokenSwap(
 		minOutUI,
 	)
 	if err != nil {
-		return "", fmt.Errorf("build combo unsigned transaction: %w", err)
+		return "", nil, fmt.Errorf("build combo unsigned transaction: %w", err)
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	signedTx, _, err := l.svcCtx.TxMananger.SignTransaction(timeoutCtx, txToString)
 	if err != nil {
-		return "", fmt.Errorf("sign combo transaction: %w", err)
+		return "", nil, fmt.Errorf("sign combo transaction: %w", err)
 	}
 
 	timeoutCtx, cancel = context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	txHash, err := l.svcCtx.TxMananger.SendWithSignTransaction(timeoutCtx, signedTx)
+	sendResult, err := l.svcCtx.TxMananger.SendWithSignTransactionWithResult(timeoutCtx, signedTx, lastValidBlockHeight)
 	if err != nil {
-		return "", fmt.Errorf("send combo transaction: %w", err)
+		return "", nil, fmt.Errorf("send combo transaction: %w", err)
 	}
-	if txHash == "" {
-		return "", fmt.Errorf("send combo transaction returned empty tx hash")
+	if sendResult.TxHash == "" {
+		return "", nil, fmt.Errorf("send combo transaction returned empty tx hash")
 	}
-	return txHash, nil
+	return sendResult.TxHash, sendResult, nil
 }
 
 func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, swapType trade.SwapType) (string, string, error) {
@@ -411,6 +420,7 @@ func (l *CreateMarketOrderLogic) getTokenProgramID(pairInfo *market.PairInfo, sw
 
 func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
 	param *entity.MarketTx,
+	sendResult *solanachain.TxSendResult,
 	txHash string,
 	err error) error {
 
@@ -442,6 +452,11 @@ func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
 		order.Status = int64(enum.OrderStatus_OnChain)
 		order.TxHash = txHash
 		updateField = append(updateField, "status", "tx_hash")
+		if sendResult != nil {
+			order.SendSlot = int64(sendResult.SendSlot)
+			order.LastValidHeight = int64(sendResult.LastValidBlockHeight)
+			updateField = append(updateField, "send_slot", "last_valid_height")
+		}
 		fmt.Printf("插入order %#v", order)
 		err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, updateField)
 		if err != nil {
@@ -450,6 +465,138 @@ func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
 	}
 
 	return nil
+}
+
+func (l *CreateMarketOrderLogic) watchMarketTxFinality(orderID int64, sendResult *solanachain.TxSendResult) {
+	threading.GoSafe(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), txFinalizeWatchTimeout)
+		defer cancel()
+
+		sig, err := aSDK.SignatureFromBase58(sendResult.TxHash)
+		if err != nil {
+			l.Errorf("watchMarketTxFinality invalid signature:%s err:%v", sendResult.TxHash, err)
+			return
+		}
+
+		start := time.Now()
+		ticker := time.NewTicker(800 * time.Millisecond)
+		defer ticker.Stop()
+
+		var lastStatus ag_rpc.ConfirmationStatusType
+		for {
+			select {
+			case <-ctx.Done():
+				l.Infof("watchMarketTxFinality timeout, orderID:%d, txHash:%s", orderID, sendResult.TxHash)
+				return
+			case <-ticker.C:
+			}
+
+			statusResp, err := l.svcCtx.TxMananger.Client.GetSignatureStatuses(ctx, false, sig)
+			if err != nil {
+				l.Errorf("watchMarketTxFinality GetSignatureStatuses err:%v, txHash:%s", err, sendResult.TxHash)
+				continue
+			}
+			//如果通过签名的方式获取不到交易
+			if statusResp == nil || len(statusResp.Value) == 0 || statusResp.Value[0] == nil {
+				if sendResult.LastValidBlockHeight > 0 {
+					blockHeight, err := l.svcCtx.TxMananger.Client.GetBlockHeight(ctx, ag_rpc.CommitmentProcessed)
+					//如果blockHeight大于最后验证高度，说明交易已经过期
+					if err == nil && blockHeight > sendResult.LastValidBlockHeight {
+						l.markTxExpired(ctx, orderID, sendResult, start)
+						return
+					}
+				}
+				continue
+			}
+
+			status := statusResp.Value[0]
+			if status.Err != nil {
+				l.markTxFailed(ctx, orderID, sendResult, status, start)
+				return
+			}
+			if status.ConfirmationStatus == "" || status.ConfirmationStatus == lastStatus {
+				continue
+			}
+			lastStatus = status.ConfirmationStatus
+
+			if status.ConfirmationStatus == ag_rpc.ConfirmationStatusFinalized {
+				l.markTxFinalized(ctx, orderID, sendResult, status, start)
+				return
+			}
+			l.markTxSeen(ctx, orderID, sendResult, status)
+		}
+	})
+}
+
+func (l *CreateMarketOrderLogic) markTxSeen(ctx context.Context, orderID int64, sendResult *solanachain.TxSendResult, status *ag_rpc.SignatureStatusesResult) {
+	order, err := l.svcCtx.TradeOrderModel.FindOne(ctx, orderID)
+	if err != nil {
+		l.Errorf("markTxSeen FindOne err:%v, orderID:%d", err, orderID)
+		return
+	}
+	order.Status = int64(enum.OrderStatus_OnChain)
+	fillTxConfirmFields(order, sendResult, status, 0)
+	if err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "landed_slot", "slot_diff", "confirm_status"}); err != nil {
+		l.Errorf("markTxSeen UpdateOrder err:%v, orderID:%d", err, orderID)
+	}
+}
+
+func (l *CreateMarketOrderLogic) markTxFinalized(ctx context.Context, orderID int64, sendResult *solanachain.TxSendResult, status *ag_rpc.SignatureStatusesResult, start time.Time) {
+	order, err := l.svcCtx.TradeOrderModel.FindOne(ctx, orderID)
+	if err != nil {
+		l.Errorf("markTxFinalized FindOne err:%v, orderID:%d", err, orderID)
+		return
+	}
+	order.Status = int64(enum.OrderStatus_Suc)
+	fillTxConfirmFields(order, sendResult, status, time.Since(start).Milliseconds())
+	if err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "landed_slot", "slot_diff", "confirm_status", "confirm_ms"}); err != nil {
+		l.Errorf("markTxFinalized UpdateOrder err:%v, orderID:%d", err, orderID)
+	}
+}
+
+func (l *CreateMarketOrderLogic) markTxFailed(ctx context.Context, orderID int64, sendResult *solanachain.TxSendResult, status *ag_rpc.SignatureStatusesResult, start time.Time) {
+	order, err := l.svcCtx.TradeOrderModel.FindOne(ctx, orderID)
+	if err != nil {
+		l.Errorf("markTxFailed FindOne err:%v, orderID:%d", err, orderID)
+		return
+	}
+	order.Status = int64(enum.OrderStatus_Fail)
+	order.FailReason = fmt.Sprintf("chain tx failed: %v", status.Err)
+	fillTxConfirmFields(order, sendResult, status, time.Since(start).Milliseconds())
+	if err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "fail_reason", "landed_slot", "slot_diff", "confirm_status", "confirm_ms"}); err != nil {
+		l.Errorf("markTxFailed UpdateOrder err:%v, orderID:%d", err, orderID)
+	}
+}
+
+func (l *CreateMarketOrderLogic) markTxExpired(ctx context.Context, orderID int64, sendResult *solanachain.TxSendResult, start time.Time) {
+	order, err := l.svcCtx.TradeOrderModel.FindOne(ctx, orderID)
+	if err != nil {
+		l.Errorf("markTxExpired FindOne err:%v, orderID:%d", err, orderID)
+		return
+	}
+	order.Status = int64(enum.OrderStatus_timeout_fail)
+	order.FailReason = "blockhash expired before transaction landed"
+	order.ConfirmMs = time.Since(start).Milliseconds()
+	order.ConfirmStatus = "expired"
+	if err := l.svcCtx.TradeOrderModel.UpdateOrder(ctx, order, []string{"status", "fail_reason", "confirm_status", "confirm_ms"}); err != nil {
+		l.Errorf("markTxExpired UpdateOrder err:%v, orderID:%d", err, orderID)
+	}
+}
+
+func fillTxConfirmFields(order *solmodel.TradeOrder, sendResult *solanachain.TxSendResult, status *ag_rpc.SignatureStatusesResult, confirmMs int64) {
+	if sendResult != nil && order.SendSlot == 0 {
+		order.SendSlot = int64(sendResult.SendSlot)
+	}
+	if status != nil {
+		order.LandedSlot = int64(status.Slot)
+		order.ConfirmStatus = string(status.ConfirmationStatus)
+	}
+	if order.SendSlot > 0 && order.LandedSlot > 0 {
+		order.SlotDiff = order.LandedSlot - order.SendSlot
+	}
+	if confirmMs > 0 {
+		order.ConfirmMs = confirmMs
+	}
 }
 
 func convertSwapErr(poolName string, err error) error {

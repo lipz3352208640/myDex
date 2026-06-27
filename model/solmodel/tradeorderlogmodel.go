@@ -39,9 +39,11 @@ func (c customTradeOrderLogModel) InsertWithOrder(ctx context.Context, o *TradeO
 			is_auto_slippage, slippage, is_anti_mev, gas_type, status, fail_reason, double_out,
 			order_cap, order_amount, order_price_base, order_value_base, order_base_price,
 			final_cap, final_amount, final_price_base, final_value_base, final_base_price,
-			gas_fee, priority_fee, dex_fee, server_fee, jito_fee, tx_hash, dex_name, pair_ca,
+			gas_fee, priority_fee, dex_fee, server_fee, jito_fee, tx_hash,
+			send_slot, landed_slot, slot_diff, confirm_status, confirm_ms, last_valid_height,
+			dex_name, pair_ca,
 			created_at, drawdown_price, trailing_percent
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON DUPLICATE KEY UPDATE
 			uid = VALUES(uid),
 			trade_type = VALUES(trade_type),
@@ -72,6 +74,12 @@ func (c customTradeOrderLogModel) InsertWithOrder(ctx context.Context, o *TradeO
 			server_fee = VALUES(server_fee),
 			jito_fee = VALUES(jito_fee),
 			tx_hash = VALUES(tx_hash),
+			send_slot = VALUES(send_slot),
+			landed_slot = VALUES(landed_slot),
+			slot_diff = VALUES(slot_diff),
+			confirm_status = VALUES(confirm_status),
+			confirm_ms = VALUES(confirm_ms),
+			last_valid_height = VALUES(last_valid_height),
 			dex_name = VALUES(dex_name),
 			pair_ca = VALUES(pair_ca),
 			drawdown_price = VALUES(drawdown_price),
@@ -84,7 +92,9 @@ func (c customTradeOrderLogModel) InsertWithOrder(ctx context.Context, o *TradeO
 		o.IsAutoSlippage, o.Slippage, o.IsAntiMev, o.GasType, o.Status, o.FailReason, o.DoubleOut,
 		o.OrderCap, o.OrderAmount, o.OrderPriceBase, o.OrderValueBase, o.OrderBasePrice,
 		o.FinalCap, o.FinalAmount, o.FinalPriceBase, o.FinalValueBase, o.FinalBasePrice,
-		o.GasFee, o.PriorityFee, o.DexFee, o.ServerFee, o.JitoFee, o.TxHash, o.DexName, o.PairCa,
+		o.GasFee, o.PriorityFee, o.DexFee, o.ServerFee, o.JitoFee, o.TxHash,
+		o.SendSlot, o.LandedSlot, o.SlotDiff, o.ConfirmStatus, o.ConfirmMs, o.LastValidHeight,
+		o.DexName, o.PairCa,
 		now, o.DrawdownPrice, o.TrailingPercent,
 	).Error
 

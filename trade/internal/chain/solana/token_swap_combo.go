@@ -49,37 +49,48 @@ func (tm *TxManager) BuildUnsignedTransactionPumpfunWithTokenSwap(
 	swapAmountUI string,
 	minOutUI string,
 ) (string, error) {
+	unsignedTx, _, err := tm.BuildUnsignedTransactionPumpfunWithTokenSwapWithResult(ctx, createMarketTx, poolCfg, swapAmountUI, minOutUI)
+	return unsignedTx, err
+}
+
+func (tm *TxManager) BuildUnsignedTransactionPumpfunWithTokenSwapWithResult(
+	ctx context.Context,
+	createMarketTx *entity.MarketTx,
+	poolCfg *entity.TokenSwapPoolConfig,
+	swapAmountUI string,
+	minOutUI string,
+) (string, uint64, error) {
 	in, err := convertMarketTx(createMarketTx)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	if in.TradePoolName != constant.PumpFunName {
-		return "", fmt.Errorf("unsupported combo trade pool: %s", in.TradePoolName)
+		return "", 0, fmt.Errorf("unsupported combo trade pool: %s", in.TradePoolName)
 	}
 
 	instructions, err := tm.CreateMarketOrderPumpfun(ctx, in)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	
+
 	swapInstructions, err := tm.BuildTokenSwapInstructionsForUser(context.Background(), in.UserWalletAddress, poolCfg, swapAmountUI, minOutUI)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	instructions = append(instructions, swapInstructions...)
 
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentFinalized)
+	resp, err := tm.Client.GetLatestBlockhash(timeoutCtx, ag_rpc.CommitmentProcessed)
 	if err != nil {
-		return "", fmt.Errorf("failed to get latest blockhash: %w", err)
+		return "", 0, fmt.Errorf("failed to get latest blockhash: %w", err)
 	}
 	fmt.Println("lllll")
 	tx, err := aSDK.NewTransaction(instructions, resp.Value.Blockhash, aSDK.TransactionPayer(in.UserWalletAddress))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	numSigners := int(tx.Message.Header.NumRequiredSignatures)
@@ -87,10 +98,10 @@ func (tm *TxManager) BuildUnsignedTransactionPumpfunWithTokenSwap(
 
 	txData, err := tx.MarshalBinary()
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
-	return base64.StdEncoding.EncodeToString(txData), nil
+	return base64.StdEncoding.EncodeToString(txData), resp.Value.LastValidBlockHeight, nil
 }
 
 func (tm *TxManager) BuildTokenSwapInstructionsForUser(
@@ -112,7 +123,7 @@ func (tm *TxManager) BuildTokenSwapInstructionsForUser(
 	if err != nil {
 		return nil, fmt.Errorf("invalid min out amount: %w", err)
 	}
-	
+
 	usdcMint := aSDK.MustPublicKeyFromBase58(poolCfg.UsdcMint)
 	swapAccount := aSDK.MustPublicKeyFromBase58(poolCfg.SwapAccount)
 	swapAuthority := aSDK.MustPublicKeyFromBase58(poolCfg.SwapAuthority)

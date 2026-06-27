@@ -155,6 +155,12 @@ CREATE TABLE `trade_order` (
   `server_fee` decimal(32,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'sol',
   `jito_fee` decimal(32,18) NOT NULL DEFAULT '0.000000000000000000' COMMENT 'sol',
   `tx_hash` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '',
+  `send_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot when SendTransaction was submitted',
+  `landed_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot where transaction landed',
+  `slot_diff` bigint NOT NULL DEFAULT '0' COMMENT 'landed_slot - send_slot',
+  `confirm_status` varchar(20) NOT NULL DEFAULT '' COMMENT 'processed/confirmed/finalized/expired',
+  `confirm_ms` bigint NOT NULL DEFAULT '0' COMMENT 'milliseconds from send to finalized/failed',
+  `last_valid_height` bigint NOT NULL DEFAULT '0' COMMENT 'latest blockhash last valid block height',
   `dex_name` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '交易时选取的交易所',
   `pair_ca` varchar(100) NOT NULL COMMENT '交易时选取的交易池',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -164,8 +170,30 @@ CREATE TABLE `trade_order` (
   PRIMARY KEY (`id`) USING BTREE,
   KEY `user` (`uid`,`status`,`trade_type`) USING BTREE,
   KEY `status_chain_id` (`status`, `chain_id`) USING BTREE,
+  KEY `tx_hash_index` (`tx_hash`) USING BTREE,
+  KEY `send_slot_index` (`send_slot`) USING BTREE,
+  KEY `landed_slot_index` (`landed_slot`) USING BTREE,
   KEY `trade_order_created_at_uid_status_index` (`created_at`,`uid`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ALTER TABLE `trade_order`
+--   ADD COLUMN `send_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot when SendTransaction was submitted' AFTER `tx_hash`,
+--   ADD COLUMN `landed_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot where transaction landed' AFTER `send_slot`,
+--   ADD COLUMN `slot_diff` bigint NOT NULL DEFAULT '0' COMMENT 'landed_slot - send_slot' AFTER `landed_slot`,
+--   ADD COLUMN `confirm_status` varchar(20) NOT NULL DEFAULT '' COMMENT 'processed/confirmed/finalized/expired' AFTER `slot_diff`,
+--   ADD COLUMN `confirm_ms` bigint NOT NULL DEFAULT '0' COMMENT 'milliseconds from send to finalized/failed' AFTER `confirm_status`,
+--   ADD COLUMN `last_valid_height` bigint NOT NULL DEFAULT '0' COMMENT 'latest blockhash last valid block height' AFTER `confirm_ms`,
+--   ADD KEY `tx_hash_index` (`tx_hash`) USING BTREE,
+--   ADD KEY `send_slot_index` (`send_slot`) USING BTREE,
+--   ADD KEY `landed_slot_index` (`landed_slot`) USING BTREE;
+
+-- ALTER TABLE `trade_order_log`
+--   ADD COLUMN `send_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot when SendTransaction was submitted' AFTER `tx_hash`,
+--   ADD COLUMN `landed_slot` bigint NOT NULL DEFAULT '0' COMMENT 'Slot where transaction landed' AFTER `send_slot`,
+--   ADD COLUMN `slot_diff` bigint NOT NULL DEFAULT '0' COMMENT 'landed_slot - send_slot' AFTER `landed_slot`,
+--   ADD COLUMN `confirm_status` varchar(20) NOT NULL DEFAULT '' COMMENT 'processed/confirmed/finalized/expired' AFTER `slot_diff`,
+--   ADD COLUMN `confirm_ms` bigint NOT NULL DEFAULT '0' COMMENT 'milliseconds from send to finalized/failed' AFTER `confirm_status`,
+--   ADD COLUMN `last_valid_height` bigint NOT NULL DEFAULT '0' COMMENT 'latest blockhash last valid block height' AFTER `confirm_ms`;
 
 
 -- CREATE TABLE `trade` (
