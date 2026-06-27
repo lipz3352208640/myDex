@@ -30,7 +30,10 @@ type CreateMarketOrderLogic struct {
 	logx.Logger
 }
 
-const txFinalizeWatchTimeout = 2 * time.Minute
+const (
+	txConfirmPollInterval = 800 * time.Millisecond
+	txConfirmRPCTimeout   = 3 * time.Second
+)
 
 func NewCreateMarketOrderLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CreateMarketOrderLogic {
 	return &CreateMarketOrderLogic{
@@ -469,49 +472,47 @@ func (l *CreateMarketOrderLogic) updateDbByTxResult(order *solmodel.TradeOrder,
 
 func (l *CreateMarketOrderLogic) watchMarketTxFinality(orderID int64, sendResult *solanachain.TxSendResult) {
 	threading.GoSafe(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), txFinalizeWatchTimeout)
-		defer cancel()
-
 		sig, err := aSDK.SignatureFromBase58(sendResult.TxHash)
 		if err != nil {
 			l.Errorf("watchMarketTxFinality invalid signature:%s err:%v", sendResult.TxHash, err)
 			return
 		}
+		if sendResult.LastValidBlockHeight == 0 {
+			l.Errorf("watchMarketTxFinality missing lastValidBlockHeight, orderID:%d, txHash:%s", orderID, sendResult.TxHash)
+			return
+		}
 
 		start := time.Now()
-		ticker := time.NewTicker(800 * time.Millisecond)
+		ticker := time.NewTicker(txConfirmPollInterval)
 		defer ticker.Stop()
 
 		var lastStatus ag_rpc.ConfirmationStatusType
 		for {
-			select {
-			case <-ctx.Done():
-				l.Infof("watchMarketTxFinality timeout, orderID:%d, txHash:%s", orderID, sendResult.TxHash)
-				return
-			case <-ticker.C:
-			}
+			<-ticker.C
 
-			statusResp, err := l.svcCtx.TxMananger.Client.GetSignatureStatuses(ctx, false, sig)
+			rpcCtx, cancel := context.WithTimeout(context.Background(), txConfirmRPCTimeout)
+			statusResp, err := l.svcCtx.TxMananger.Client.GetSignatureStatuses(rpcCtx, false, sig)
+			cancel()
 			if err != nil {
 				l.Errorf("watchMarketTxFinality GetSignatureStatuses err:%v, txHash:%s", err, sendResult.TxHash)
 				continue
 			}
 			//如果通过签名的方式获取不到交易
 			if statusResp == nil || len(statusResp.Value) == 0 || statusResp.Value[0] == nil {
-				if sendResult.LastValidBlockHeight > 0 {
-					blockHeight, err := l.svcCtx.TxMananger.Client.GetBlockHeight(ctx, ag_rpc.CommitmentProcessed)
-					//如果blockHeight大于最后验证高度，说明交易已经过期
-					if err == nil && blockHeight > sendResult.LastValidBlockHeight {
-						l.markTxExpired(ctx, orderID, sendResult, start)
-						return
-					}
+				rpcCtx, cancel = context.WithTimeout(context.Background(), txConfirmRPCTimeout)
+				blockHeight, err := l.svcCtx.TxMananger.Client.GetBlockHeight(rpcCtx, ag_rpc.CommitmentProcessed)
+				cancel()
+				//如果blockHeight大于最后验证高度，说明交易已经过期
+				if err == nil && blockHeight > sendResult.LastValidBlockHeight {
+					l.markTxExpired(context.Background(), orderID, sendResult, start)
+					return
 				}
 				continue
 			}
 
 			status := statusResp.Value[0]
 			if status.Err != nil {
-				l.markTxFailed(ctx, orderID, sendResult, status, start)
+				l.markTxFailed(context.Background(), orderID, sendResult, status, start)
 				return
 			}
 			if status.ConfirmationStatus == "" || status.ConfirmationStatus == lastStatus {
@@ -520,10 +521,10 @@ func (l *CreateMarketOrderLogic) watchMarketTxFinality(orderID int64, sendResult
 			lastStatus = status.ConfirmationStatus
 
 			if status.ConfirmationStatus == ag_rpc.ConfirmationStatusFinalized {
-				l.markTxFinalized(ctx, orderID, sendResult, status, start)
+				l.markTxFinalized(context.Background(), orderID, sendResult, status, start)
 				return
 			}
-			l.markTxSeen(ctx, orderID, sendResult, status)
+			l.markTxSeen(context.Background(), orderID, sendResult, status)
 		}
 	})
 }
